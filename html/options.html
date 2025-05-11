@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>SiteBlocker Free Settings</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="../css/options.css" />
+  </head>
+  <body>
+    <div class="options-container">
+      <header>
+        <h1>SiteBlocker Free Settings</h1>
+      </header>
+
+      <main>
+        <section class="form-section" id="always-block-section">
+          <h2>Always Blocked Websites</h2>
+          <div class="input-group">
+            <label for="alwaysBlockInput">Website URL (e.g., reddit.com)</label>
+            <input
+              type="text"
+              id="alwaysBlockInput"
+              placeholder="e.g., reddit.com"
+            />
+          </div>
+          <div class="button-group">
+            <button id="addAlwaysBlock">Add</button>
+            <!-- Edit buttons for "Always Block" might be added here by JS or the Add button repurposed -->
+          </div>
+          <ul id="alwaysBlockList" class="rules-list">
+            <!-- Dynamically generated list items -->
+          </ul>
+        </section>
+
+        <hr class="section-divider" />
+
+        <section class="form-section" id="timed-block-section">
+          <h2>Time-Scheduled Blocked Websites</h2>
+          <div class="input-group">
+            <label for="timedBlockInput">Website URL (e.g., youtube.com)</label>
+            <input
+              type="text"
+              id="timedBlockInput"
+              placeholder="e.g., youtube.com"
+            />
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="startTime">Start Time (HH:MM)</label>
+              <input type="time" id="startTime" />
+            </div>
+            <div class="input-group">
+              <label for="endTime">End Time (HH:MM)</label>
+              <input type="time" id="endTime" />
+            </div>
+          </div>
+          <div class="button-group" id="timedBlockButtons">
+            <button id="addTimedBlock">Add</button>
+            <!-- Global saveChangesButton and cancelEditButton will be placed here or
+               elsewhere centrally by JS when a form is being edited -->
+          </div>
+          <ul id="timedBlockList" class="rules-list">
+            <!-- Dynamically generated list items -->
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <script src="../js/options.js"></script>
+  </body>
+</html>

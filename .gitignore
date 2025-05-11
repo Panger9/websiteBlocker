@@ -1,0 +1,32 @@
+# Betriebssystem-spezifische Dateien
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Log-Dateien
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Verzeichnisse für Abhängigkeiten (falls du später welche hinzufügst)
+node_modules/
+jspm_packages/
+
+# Build-Verzeichnisse (falls du später einen Build-Prozess einführst)
+dist/
+build/
+out/
+
+# Editor-spezifische Dateien
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Archivdateien (z.B. für das Packen der Extension)
+*.zip
+*.crx
