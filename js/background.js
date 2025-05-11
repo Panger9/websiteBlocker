@@ -626,6 +626,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 })
 
+// Listener für Klick auf das Action-Icon der Erweiterung
+chrome.action.onClicked.addListener((tab) => {
+  console.log("Action icon clicked, opening options page.")
+  chrome.runtime.openOptionsPage()
+})
+
 // Initialisierung beim Start des Service Workers
 async function initialize() {
   console.log("Initialisiere Extension (DNR)...")
