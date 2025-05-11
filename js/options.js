@@ -12,6 +12,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const addTimedBlockButton = document.getElementById("addTimedBlock") // Text from HTML
   const timedBlockListUI = document.getElementById("timedBlockList")
 
+  // Subpage section elements
+  const subpageRulesEditSection = document.getElementById(
+    "subpage-rules-edit-section"
+  )
+  const editingDomainNameSpan = document.getElementById("editingDomainName")
+  const subpageModeRadios = document.querySelectorAll(
+    'input[name="subpageMode"]'
+  )
+  const subpageWhitelistExplanation = document.getElementById(
+    "subpage-whitelist-explanation"
+  )
+  const subpageBlacklistExplanation = document.getElementById(
+    "subpage-blacklist-explanation"
+  )
+  const subpageWhitelistManagementDiv = document.getElementById(
+    "subpage-whitelist-management"
+  )
+  const subpageBlacklistManagementDiv = document.getElementById(
+    "subpage-blacklist-management"
+  )
+  const subpageWhitelistInput = document.getElementById("subpageWhitelistInput")
+  const addSubpageWhitelistButton = document.getElementById(
+    "addSubpageWhitelist"
+  )
+  const subpageWhitelistUI = document.getElementById("subpageWhitelistUI")
+  const subpageBlacklistInput = document.getElementById("subpageBlacklistInput")
+  const addSubpageBlacklistButton = document.getElementById(
+    "addSubpageBlacklist"
+  )
+  const subpageBlacklistUI = document.getElementById("subpageBlacklistUI")
+  const editingMainUrlDisplays = document.querySelectorAll(
+    ".editing-main-url-display"
+  )
+
   const globalEditButtonContainer = document.getElementById("timedBlockButtons")
 
   let saveChangesButton
@@ -22,6 +56,9 @@ document.addEventListener("DOMContentLoaded", () => {
     index: -1,
     type: "",
     originalRule: null,
+    subpageMode: "none",
+    subpageWhitelist: [],
+    subpageBlacklist: [],
   }
 
   createGlobalEditButtons()
@@ -43,13 +80,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (globalEditButtonContainer) {
       globalEditButtonContainer.appendChild(saveChangesButton)
       globalEditButtonContainer.appendChild(cancelEditButton)
+    } else {
+      console.warn(
+        "Timed block button container not found for global edit buttons."
+      )
     }
   }
 
   addAlwaysBlockButton.addEventListener("click", () => {
     if (editState.index !== -1) return
     const site = alwaysBlockInput.value.trim().toLowerCase()
-    if (validateAndAddRule({ type: "always", site })) {
+    if (
+      validateAndAddRule({
+        type: "always",
+        site,
+        subpageMode: "none",
+        subpageWhitelist: [],
+        subpageBlacklist: [],
+      })
+    ) {
       alwaysBlockInput.value = ""
     }
   })
@@ -60,7 +109,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const startTime = startTimeInput.value
     const endTime = endTimeInput.value
 
-    if (validateAndAddRule({ type: "timed", site, startTime, endTime })) {
+    if (
+      validateAndAddRule({
+        type: "timed",
+        site,
+        startTime,
+        endTime,
+        subpageMode: "none",
+        subpageWhitelist: [],
+        subpageBlacklist: [],
+      })
+    ) {
       timedBlockInput.value = ""
       startTimeInput.value = ""
       endTimeInput.value = ""
@@ -79,7 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("Website URL cannot be empty.")
         isValid = false
       } else {
-        updatedRuleData = { site }
+        updatedRuleData.site = site
       }
     } else if (editState.type === "timed") {
       const site = timedBlockInput.value.trim().toLowerCase()
@@ -96,14 +155,47 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("Start and end time cannot be identical.")
         isValid = false
       } else {
-        updatedRuleData = { site, startTime, endTime }
+        updatedRuleData.site = site
+        updatedRuleData.startTime = startTime
+        updatedRuleData.endTime = endTime
       }
     }
 
     if (isValid) {
-      rules[editState.index] = { ...rules[editState.index], ...updatedRuleData }
-      saveRulesToStorage()
-      exitEditMode()
+      updatedRuleData.subpageMode = editState.subpageMode
+      updatedRuleData.subpageWhitelist = [...editState.subpageWhitelist]
+      updatedRuleData.subpageBlacklist = [...editState.subpageBlacklist]
+
+      const originalSite = rules[editState.index].site
+      const newSite = updatedRuleData.site
+      const isSiteChanged = originalSite !== newSite
+
+      if (isSiteChanged) {
+        const exists = rules.some(
+          (r, idx) =>
+            idx !== editState.index &&
+            r.type === editState.type &&
+            r.site === newSite &&
+            (r.type === "always" ||
+              (r.startTime === updatedRuleData.startTime &&
+                r.endTime === updatedRuleData.endTime))
+        )
+        if (exists) {
+          alert(
+            "This exact rule (site and time for timed rules) already exists."
+          )
+          isValid = false
+        }
+      }
+
+      if (isValid) {
+        rules[editState.index] = {
+          ...rules[editState.index],
+          ...updatedRuleData,
+        }
+        saveRulesToStorage()
+        exitEditMode()
+      }
     }
   }
 
@@ -122,6 +214,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     rules.forEach((rule, index) => {
       const li = document.createElement("li")
+      li.classList.add(`rule-item-${rule.type}`)
+      if (editState.index === index) {
+        li.classList.add("editing")
+      }
+
       const ruleTextDiv = document.createElement("div")
       ruleTextDiv.classList.add("rule-text")
 
@@ -131,13 +228,35 @@ document.addEventListener("DOMContentLoaded", () => {
       ruleTextDiv.appendChild(siteUrlSpan)
 
       if (rule.type === "timed") {
-        const timeInfoSpan = document.createElement("span")
-        timeInfoSpan.classList.add("time-info")
-        timeInfoSpan.textContent = `Blocked from ${rule.startTime} to ${rule.endTime}`
-        ruleTextDiv.appendChild(timeInfoSpan)
-        timedBlockListUI.appendChild(li)
-      } else {
-        alwaysBlockListUI.appendChild(li)
+        const timeSpan = document.createElement("span")
+        timeSpan.classList.add("time-details")
+        timeSpan.textContent = ` (${rule.startTime} - ${rule.endTime})`
+        ruleTextDiv.appendChild(timeSpan)
+      }
+
+      if (rule.subpageMode && rule.subpageMode !== "none") {
+        const subpageSummarySpan = document.createElement("span")
+        subpageSummarySpan.classList.add("subpage-summary")
+        if (
+          rule.subpageMode === "whitelist" &&
+          rule.subpageWhitelist &&
+          rule.subpageWhitelist.length > 0
+        ) {
+          subpageSummarySpan.textContent = ` (Whitelisting ${
+            rule.subpageWhitelist.length
+          } subpage${rule.subpageWhitelist.length > 1 ? "s" : ""})`
+        } else if (
+          rule.subpageMode === "blacklist" &&
+          rule.subpageBlacklist &&
+          rule.subpageBlacklist.length > 0
+        ) {
+          subpageSummarySpan.textContent = ` (Blacklisting ${
+            rule.subpageBlacklist.length
+          } subpage${rule.subpageBlacklist.length > 1 ? "s" : ""})`
+        }
+        if (subpageSummarySpan.textContent) {
+          ruleTextDiv.appendChild(subpageSummarySpan)
+        }
       }
       li.appendChild(ruleTextDiv)
 
@@ -157,6 +276,12 @@ document.addEventListener("DOMContentLoaded", () => {
       actionsContainer.appendChild(removeButton)
 
       li.appendChild(actionsContainer)
+
+      if (rule.type === "always") {
+        alwaysBlockListUI.appendChild(li)
+      } else {
+        timedBlockListUI.appendChild(li)
+      }
     })
   }
 
@@ -164,10 +289,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const ruleToEdit = rules[index]
     if (!ruleToEdit) return
 
+    if (editState.index !== -1 && editState.index !== index) {
+      exitEditMode(false)
+    }
+
     editState = {
       index: index,
       type: ruleToEdit.type,
       originalRule: { ...ruleToEdit },
+      subpageMode: ruleToEdit.subpageMode || "none",
+      subpageWhitelist: ruleToEdit.subpageWhitelist
+        ? [...ruleToEdit.subpageWhitelist]
+        : [],
+      subpageBlacklist: ruleToEdit.subpageBlacklist
+        ? [...ruleToEdit.subpageBlacklist]
+        : [],
     }
 
     addAlwaysBlockButton.style.display = "none"
@@ -178,8 +314,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (editState.type === "always") {
       alwaysBlockInput.value = ruleToEdit.site
       alwaysBlockInput.disabled = false
-      alwaysBlockInput.focus()
-
       timedBlockInput.disabled = true
       startTimeInput.disabled = true
       endTimeInput.disabled = true
@@ -190,13 +324,25 @@ document.addEventListener("DOMContentLoaded", () => {
       timedBlockInput.disabled = false
       startTimeInput.disabled = false
       endTimeInput.disabled = false
-      timedBlockInput.focus()
-
       alwaysBlockInput.disabled = true
     }
+
+    editingDomainNameSpan.textContent = ruleToEdit.site
+    editingMainUrlDisplays.forEach(
+      (span) => (span.textContent = ruleToEdit.site)
+    )
+
+    subpageModeRadios.forEach((radio) => {
+      radio.checked = radio.value === editState.subpageMode
+    })
+    updateSubpageExplanationAndInputs()
+    renderSubpageLists()
+
+    subpageRulesEditSection.style.display = "block"
+    renderLists()
   }
 
-  function exitEditMode() {
+  function exitEditMode(performRender = true) {
     alwaysBlockInput.value = ""
     timedBlockInput.value = ""
     startTimeInput.value = ""
@@ -212,7 +358,114 @@ document.addEventListener("DOMContentLoaded", () => {
     startTimeInput.disabled = false
     endTimeInput.disabled = false
 
-    editState = { index: -1, type: "", originalRule: null }
+    subpageRulesEditSection.style.display = "none"
+    editingDomainNameSpan.textContent = ""
+    editState = {
+      index: -1,
+      type: "",
+      originalRule: null,
+      subpageMode: "none",
+      subpageWhitelist: [],
+      subpageBlacklist: [],
+    }
+
+    if (performRender) {
+      renderLists()
+    }
+  }
+
+  subpageModeRadios.forEach((radio) => {
+    radio.addEventListener("change", (event) => {
+      if (editState.index === -1) return
+      editState.subpageMode = event.target.value
+      updateSubpageExplanationAndInputs()
+    })
+  })
+
+  function updateSubpageExplanationAndInputs() {
+    const currentMainUrl = editState.originalRule
+      ? editState.originalRule.site
+      : "this domain"
+    editingMainUrlDisplays.forEach(
+      (span) => (span.textContent = currentMainUrl)
+    )
+
+    subpageWhitelistExplanation.style.display =
+      editState.subpageMode === "whitelist" ? "block" : "none"
+    subpageBlacklistExplanation.style.display =
+      editState.subpageMode === "blacklist" ? "block" : "none"
+    subpageWhitelistManagementDiv.style.display =
+      editState.subpageMode === "whitelist" ? "block" : "none"
+    subpageBlacklistManagementDiv.style.display =
+      editState.subpageMode === "blacklist" ? "block" : "none"
+  }
+
+  addSubpageWhitelistButton.addEventListener("click", () => {
+    if (editState.index === -1 || editState.subpageMode !== "whitelist") return
+    const subpage = subpageWhitelistInput.value.trim()
+    if (subpage && !editState.subpageWhitelist.includes(subpage)) {
+      if (!subpage.startsWith("/")) {
+        alert(
+          "Subpage path must start with a '/' (e.g., /articles/technology)."
+        )
+        return
+      }
+      editState.subpageWhitelist.push(subpage)
+      subpageWhitelistInput.value = ""
+      renderSubpageLists()
+    } else if (editState.subpageWhitelist.includes(subpage)) {
+      alert("This subpage is already in the whitelist.")
+    }
+  })
+
+  addSubpageBlacklistButton.addEventListener("click", () => {
+    if (editState.index === -1 || editState.subpageMode !== "blacklist") return
+    const subpage = subpageBlacklistInput.value.trim()
+    if (subpage && !editState.subpageBlacklist.includes(subpage)) {
+      if (!subpage.startsWith("/")) {
+        alert(
+          "Subpage path must start with a '/' (e.g., /games or /forum/offtopic)."
+        )
+        return
+      }
+      editState.subpageBlacklist.push(subpage)
+      subpageBlacklistInput.value = ""
+      renderSubpageLists()
+    } else if (editState.subpageBlacklist.includes(subpage)) {
+      alert("This subpage is already in the blacklist.")
+    }
+  })
+
+  function renderSubpageLists() {
+    subpageWhitelistUI.innerHTML = ""
+    editState.subpageWhitelist.forEach((path, idx) => {
+      const li = document.createElement("li")
+      li.textContent = path
+      const removeBtn = document.createElement("button")
+      removeBtn.textContent = "Remove"
+      removeBtn.classList.add("remove-subpage-button")
+      removeBtn.addEventListener("click", () => {
+        editState.subpageWhitelist.splice(idx, 1)
+        renderSubpageLists()
+      })
+      li.appendChild(removeBtn)
+      subpageWhitelistUI.appendChild(li)
+    })
+
+    subpageBlacklistUI.innerHTML = ""
+    editState.subpageBlacklist.forEach((path, idx) => {
+      const li = document.createElement("li")
+      li.textContent = path
+      const removeBtn = document.createElement("button")
+      removeBtn.textContent = "Remove"
+      removeBtn.classList.add("remove-subpage-button")
+      removeBtn.addEventListener("click", () => {
+        editState.subpageBlacklist.splice(idx, 1)
+        renderSubpageLists()
+      })
+      li.appendChild(removeBtn)
+      subpageBlacklistUI.appendChild(li)
+    })
   }
 
   function isTimeFormatValid(time) {
@@ -220,6 +473,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function validateAndAddRule(ruleData) {
+    ruleData.subpageMode = ruleData.subpageMode || "none"
+    ruleData.subpageWhitelist = ruleData.subpageWhitelist || []
+    ruleData.subpageBlacklist = ruleData.subpageBlacklist || []
+
     if (ruleData.type === "always") {
       if (!ruleData.site) {
         alert("Website URL cannot be empty.")
@@ -266,12 +523,18 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const result = await chrome.storage.local.get(["blockedRules"])
       rules = result.blockedRules || []
+      rules = rules.map((rule) => ({
+        ...rule,
+        subpageMode: rule.subpageMode || "none",
+        subpageWhitelist: rule.subpageWhitelist || [],
+        subpageBlacklist: rule.subpageBlacklist || [],
+      }))
     } catch (e) {
       console.error("Error loading rules from storage:", e)
       rules = []
     }
     renderLists()
-    exitEditMode()
+    exitEditMode(false)
   }
 
   async function saveRulesToStorage() {
@@ -279,7 +542,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await chrome.storage.local.set({ blockedRules: rules })
       chrome.runtime.sendMessage({ type: "rulesUpdated" }, (response) => {
         if (chrome.runtime.lastError) {
-          // console.warn("SW message failed:", chrome.runtime.lastError.message);
+          console.warn("SW message failed:", chrome.runtime.lastError.message)
         }
       })
     } catch (e) {
@@ -289,15 +552,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function removeRule(indexToRemove) {
+    if (editState.index === indexToRemove) {
+      exitEditMode(false)
+    }
     if (indexToRemove >= 0 && indexToRemove < rules.length) {
-      // Optional: Confirmation dialog
-      // if (!confirm(`Are you sure you want to remove the rule for "${rules[indexToRemove].site}"?`)) {
-      //     return;
-      // }
       rules.splice(indexToRemove, 1)
       saveRulesToStorage()
-      if (editState.index === indexToRemove || editState.index !== -1) {
-        exitEditMode()
+      if (editState.index > indexToRemove) {
+        editState.index--
       }
     } else {
       console.error("Invalid index for removal:", indexToRemove)

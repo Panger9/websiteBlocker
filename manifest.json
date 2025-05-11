@@ -7,7 +7,9 @@
     "storage",
     "declarativeNetRequest",
     "declarativeNetRequestFeedback",
-    "alarms"
+    "alarms",
+    "webNavigation",
+    "tabs"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -17,6 +19,12 @@
     "rule_resources": []
   },
   "options_page": "html/options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["html/blocked.html", "js/blocked.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

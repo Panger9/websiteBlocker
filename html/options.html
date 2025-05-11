@@ -28,7 +28,7 @@
             <!-- Edit buttons for "Always Block" might be added here by JS or the Add button repurposed -->
           </div>
           <ul id="alwaysBlockList" class="rules-list">
-            <!-- Dynamically generated list items -->
+            <!-- Dynamically generated list items will include an edit button -->
           </ul>
         </section>
 
@@ -60,8 +60,117 @@
                elsewhere centrally by JS when a form is being edited -->
           </div>
           <ul id="timedBlockList" class="rules-list">
-            <!-- Dynamically generated list items -->
+            <!-- Dynamically generated list items will include an edit button -->
           </ul>
+        </section>
+
+        <!-- New Section for Subpage Rule Editing (initially hidden) -->
+        <section
+          class="form-section"
+          id="subpage-rules-edit-section"
+          style="display: none"
+        >
+          <h3>
+            Subpage Exceptions for
+            <span id="editingDomainName" style="font-weight: bold"></span>
+          </h3>
+          <p>
+            Manage specific subpages for the domain you are currently editing.
+          </p>
+
+          <div class="input-group">
+            <label>
+              <input type="radio" name="subpageMode" value="none" checked />
+              No subpage exceptions (block entire domain as specified)
+            </label>
+          </div>
+          <div class="input-group">
+            <label>
+              <input type="radio" name="subpageMode" value="whitelist" />
+              Whitelist specific subpages (block domain, but allow these)
+            </label>
+            <div
+              id="subpage-whitelist-explanation"
+              class="subpage-explanation"
+              style="
+                display: none;
+                font-size: 0.9em;
+                margin-left: 20px;
+                margin-top: 5px;
+              "
+            >
+              <p>
+                <strong>Whitelist Mode:</strong> The entire domain
+                <span class="editing-main-url-display"></span> will be blocked
+                according to the main rule (always or timed). However, the
+                subpages listed below will be ACCESSIBLE.
+              </p>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>
+              <input type="radio" name="subpageMode" value="blacklist" />
+              Blacklist specific subpages (allow domain, but block these)
+            </label>
+            <div
+              id="subpage-blacklist-explanation"
+              class="subpage-explanation"
+              style="
+                display: none;
+                font-size: 0.9em;
+                margin-left: 20px;
+                margin-top: 5px;
+              "
+            >
+              <p>
+                <strong>Blacklist Mode:</strong> The main domain
+                <span class="editing-main-url-display"></span> will generally be
+                ACCESSIBLE (unless covered by another rule). ONLY the specific
+                subpages listed below will be BLOCKED.
+              </p>
+            </div>
+          </div>
+
+          <div
+            id="subpage-whitelist-management"
+            style="display: none; margin-top: 15px"
+          >
+            <h4>
+              Whitelisted Subpages (e.g., /important-article or
+              /tools/specific-tool)
+            </h4>
+            <div class="input-group">
+              <input
+                type="text"
+                id="subpageWhitelistInput"
+                placeholder="/subpage-path"
+              />
+              <button id="addSubpageWhitelist" class="subpage-button">
+                Add to Whitelist
+              </button>
+            </div>
+            <ul id="subpageWhitelistUI" class="rules-list subpage-list"></ul>
+          </div>
+
+          <div
+            id="subpage-blacklist-management"
+            style="display: none; margin-top: 15px"
+          >
+            <h4>
+              Blacklisted Subpages (e.g., /distracting-feed or /games-section)
+            </h4>
+            <div class="input-group">
+              <input
+                type="text"
+                id="subpageBlacklistInput"
+                placeholder="/subpage-path"
+              />
+              <button id="addSubpageBlacklist" class="subpage-button">
+                Add to Blacklist
+              </button>
+            </div>
+            <ul id="subpageBlacklistUI" class="rules-list subpage-list"></ul>
+          </div>
         </section>
       </main>
     </div>
