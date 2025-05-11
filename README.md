@@ -1,35 +1,45 @@
-Privacy Policy for SiteBlocker Free Chrome Extension
+# SiteBlocker Free
 
-Last Updated: 08th of May 2025
+Boost your focus and take control of your browsing with SiteBlocker Free!
 
-Thank you for using SiteBlocker Free ("the Extension"). This Privacy Policy explains how we handle your information.
+SiteBlocker Free helps you easily block distracting websites, either permanently or on a set schedule. It's a simple, effective tool to improve productivity and manage your online time.
 
-1. Information We Do Not Collect
+## Key Features
 
-SiteBlocker Free is designed with your privacy in mind. We do not collect, store, or transmit any personally identifiable information, browsing history (other than the URLs you explicitly provide for blocking), or any other sensitive personal data.
+### PERMANENT BLOCKING
 
-2. Information You Provide for Blocking
+- Add any website you want to block completely, anytime.
 
-   - Websites to Block: You provide specific website URLs that you wish to block.
-   - Time Schedules: You may provide start and end times for scheduled blocking.
+### SCHEDULED BLOCKING
 
-3. How This Information is Used and Stored
+- Set custom time windows to block sites during work, study, or specific hours.
+- Supports overnight schedules (e.g., 10 PM to 7 AM).
 
-   - Local Storage: All website URLs and time schedules you configure are stored exclusively locally on your computer using Chrome's `chrome.storage.local` API.
-   - Purpose: This information is used solely by the Extension to perform its core function: blocking access to the websites you have specified, according to the schedules you have set.
-   - No External Transmission: Your configured blocklist and schedules are NEVER transmitted to any external servers or third parties. All processing happens locally within your browser.
+### EASY TO USE
 
-4. Data Security
-   Since all data is stored locally on your device, its security is tied to the security of your computer and your Chrome browser profile.
+- Quickly add, remove, or edit your blocked sites and schedules through a clean settings page.
 
-5. Data Removal
-   You can remove your configured data at any time by:
+### LIGHTWEIGHT & EFFICIENT
 
-   - Deleting individual rules within the Extension's options page.
-   - Uninstalling the SiteBlocker Free extension, which will remove all locally stored data associated with it.
+- Built for speed using modern Chrome technology (Manifest V3).
 
-6. Changes to This Privacy Policy
-   We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy within the extension's store listing or options page.
+### PRIVACY FOCUSED
 
-7. Contact Us
-   If you have any questions about this Privacy Policy, please contact us at fabio.pellegrino1011@gmail.com
+- Your block rules are stored only on your computer. We don't track or share your data.
+
+### COMPLETELY FREE
+
+- No ads, no subscriptions. Just a simple tool for better focus.
+
+## How to Use
+
+1.  **Install SiteBlocker Free.**
+2.  **Click the extension icon** to open Settings.
+3.  **Add sites** to your "Always Blocked" list or create a "Time-Scheduled" block.
+4.  **Enjoy more focused browsing!**
+
+SiteBlocker Free is designed to be straightforward and helpful. We hope it helps you reclaim your time!
+
+---
+
+For information on how your data is handled, please see our [Privacy Policy](PRIVACY.md).
