@@ -1,10 +1,10 @@
 // js/background.js
-console.log("Background Service Worker (declarativeNetRequest) gestartet.")
+console.log("Background Service Worker (declarativeNetRequest) started.")
 
-// Path zur lokalen Blockierseite, relativ zum Extension-Root
+// Path to the local blocking page, relative to extension root
 const BLOCKED_EXTENSION_PATH = "/html/blocked.html"
 
-let currentRules = [] // Hält die aktuell geladenen Regeln
+let currentRules = [] // Holds the currently loaded rules
 
 // --- Start Refactored Helper Functions ---
 
@@ -31,6 +31,57 @@ function normalizePath(path) {
     cleanedPath = "/" + cleanedPath
   }
   return cleanedPath
+}
+
+// Enhanced function to handle both paths and query parameters
+function normalizeUrlPattern(urlPattern) {
+  if (!urlPattern || typeof urlPattern !== "string") return "/"
+
+  let cleanedPattern = urlPattern.trim()
+
+  // If it doesn't start with /, add it
+  if (!cleanedPattern.startsWith("/")) {
+    cleanedPattern = "/" + cleanedPattern
+  }
+
+  return cleanedPattern
+}
+
+// Function to check if a URL matches a whitelist pattern (supports query parameters)
+function urlMatchesPattern(url, pattern) {
+  try {
+    const parsedUrl = new URL(url)
+    const fullPath = parsedUrl.pathname + parsedUrl.search // Includes query parameters
+
+    // Special case: if pattern is "/" and path is "/", it's a match
+    if (pattern === "/" && fullPath === "/") {
+      return true
+    }
+
+    // Skip empty or invalid patterns
+    if (
+      !pattern ||
+      pattern === "/" ||
+      pattern.replace(/\*/g, "") === "" ||
+      pattern.replace(/\*/g, "") === "/"
+    ) {
+      return false
+    }
+
+    // Handle different pattern types
+    if (pattern.endsWith("*")) {
+      const prefix = pattern.slice(0, -1)
+      return fullPath.startsWith(prefix)
+    } else if (pattern.endsWith("/")) {
+      return fullPath.startsWith(pattern)
+    } else {
+      // For exact matches or contains matches
+      return fullPath.includes(pattern)
+    }
+  } catch (e) {
+    console.error("Error parsing URL in urlMatchesPattern:", url, e)
+    return false
+  }
 }
 
 function isRuleTimeActive(rule, currentTimeInMinutes) {
@@ -63,7 +114,7 @@ function isRuleTimeActive(rule, currentTimeInMinutes) {
 
 // --- End Refactored Helper Functions ---
 
-// Funktion zum Laden der Regeln aus dem Speicher
+// Function to load rules from storage
 async function loadRulesFromStorage() {
   try {
     const result = await chrome.storage.local.get(["blockedRules"])
@@ -74,14 +125,14 @@ async function loadRulesFromStorage() {
       subpageWhitelist: rule.subpageWhitelist || [],
       subpageBlacklist: rule.subpageBlacklist || [],
     }))
-    console.log("Regeln aus Storage geladen und normalisiert:", currentRules)
+    console.log("Rules loaded and normalized from storage:", currentRules)
     await updateDeclarativeNetRequestRules()
   } catch (e) {
-    console.error("Fehler beim Laden der Regeln:", e)
+    console.error("Error loading rules:", e)
   }
 }
 
-// Definiere alle Ressourcentypen, die blockiert werden sollen
+// Define all resource types that should be blocked
 const ALL_RESOURCE_TYPES = [
   "main_frame",
   "sub_frame",
@@ -100,7 +151,42 @@ const ALL_RESOURCE_TYPES = [
   "other",
 ]
 
-// Wandelt unsere gespeicherten Regeln in declarativeNetRequest-Regeln um
+// Only main frame for initial navigation blocking
+const MAIN_FRAME_ONLY = ["main_frame"]
+
+// Input Validation Helper Function
+function validateDomainInput(domain) {
+  if (!domain || typeof domain !== "string") {
+    return false
+  }
+
+  const trimmedDomain = domain.trim().toLowerCase()
+
+  if (trimmedDomain === "") {
+    return false
+  }
+
+  // Basic domain validation regex
+  const domainRegex =
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
+
+  if (!domainRegex.test(trimmedDomain)) {
+    return false
+  }
+
+  // Additional checks for common invalid patterns
+  if (
+    trimmedDomain.includes("..") ||
+    trimmedDomain.startsWith(".") ||
+    trimmedDomain.endsWith(".")
+  ) {
+    return false
+  }
+
+  return true
+}
+
+// Converts our stored rules to declarativeNetRequest rules
 function convertToDNRRules(storedRules) {
   const dnrRules = []
   let dnrRuleIdCounter = 1
@@ -108,43 +194,39 @@ function convertToDNRRules(storedRules) {
   const now = new Date()
   const currentTimeInMinutes = now.getHours() * 60 + now.getMinutes()
   console.log(
-    "Starte Konvertierung von storedRules zu DNR:",
+    "Starting conversion from storedRules to DNR:",
     JSON.parse(JSON.stringify(storedRules))
   )
-
   storedRules.forEach((rule, index) => {
     console.log(
-      `Verarbeite Regel ${index} (vor Zeitcheck):`,
+      `Processing rule ${index} (before time check):`,
       JSON.parse(JSON.stringify(rule))
     )
 
-    if (
-      !rule.site ||
-      typeof rule.site !== "string" ||
-      rule.site.trim() === ""
-    ) {
-      console.warn(
-        `Ungültige oder leere Regel-Site übersprungen (Regel ${index}):`,
-        rule
-      )
+    if (!validateDomainInput(rule.site)) {
+      console.warn(`Invalid or empty rule site skipped (rule ${index}):`, rule)
       return
     }
 
     if (!isRuleTimeActive(rule, currentTimeInMinutes)) {
       console.log(
-        `Regel ${index} (${rule.site}) ist zeitlich nicht aktiv und wird übersprungen.`
+        `Rule ${index} (${rule.site}) is not time-active and will be skipped.`
       )
       return
     }
-    console.log(`Regel ${index} (${rule.site}) ist zeitlich aktiv.`)
+    console.log(`Rule ${index} (${rule.site}) is time-active.`)
 
     const { primaryDomain, wwwDomain } = normalizeDomain(rule.site)
     const evaluatedSubpageMode = rule.subpageMode || "none"
     console.log(
-      `Regel ${index} (${rule.site}): Ausgewerteter subpageMode = '${evaluatedSubpageMode}'. Regel-Original subpageMode = '${rule.subpageMode}'`
+      `Rule ${index} (${rule.site}): Evaluated subpageMode = '${evaluatedSubpageMode}'. Original rule subpageMode = '${rule.subpageMode}'`
     )
 
-    const createRuleEntry = (condition, actionType = "redirect") => {
+    const createRuleEntry = (
+      condition,
+      actionType = "redirect",
+      resourceTypes = ALL_RESOURCE_TYPES
+    ) => {
       let action
       if (actionType === "redirect") {
         action = {
@@ -161,51 +243,66 @@ function convertToDNRRules(storedRules) {
         id: dnrRuleIdCounter++,
         priority: action.type === "allow" ? 2 : 1,
         action: action,
-        condition: { ...condition, resourceTypes: ALL_RESOURCE_TYPES },
+        condition: { ...condition, resourceTypes: resourceTypes },
       }
     }
 
     if (evaluatedSubpageMode === "none") {
       console.log(
-        `Regel ${index} (${rule.site}): Modus 'none' gewählt. Erstelle requestDomains Regel.`
+        `Rule ${index} (${rule.site}): Mode 'none' selected. Creating requestDomains rule.`
       )
       const domainsToBlock =
         primaryDomain === wwwDomain
           ? [primaryDomain]
           : [primaryDomain, wwwDomain]
-      dnrRules.push(createRuleEntry({ requestDomains: domainsToBlock }))
+      dnrRules.push(
+        createRuleEntry(
+          { requestDomains: domainsToBlock },
+          "redirect",
+          ALL_RESOURCE_TYPES
+        )
+      )
     } else if (evaluatedSubpageMode === "whitelist") {
-      console.log(`Regel ${index} (${rule.site}): Modus 'whitelist' gewählt.`)
+      console.log(`Rule ${index} (${rule.site}): Mode 'whitelist' selected.`)
       const whitelistedPaths = rule.subpageWhitelist || []
       console.log(
-        `Regel ${index} (${rule.site}): whitelistedPaths =`,
+        `Rule ${index} (${rule.site}): whitelistedPaths =`,
         JSON.parse(JSON.stringify(whitelistedPaths))
       )
 
+      // For whitelist mode: Only block main_frame navigation to prevent initial page load
+      // This allows all resources (scripts, CSS, AJAX, etc.) to load freely
       console.log(
-        `Regel ${index} (${rule.site}): Erstelle generelle redirect Regel für Domain '${primaryDomain}'.`
+        `Rule ${index} (${rule.site}): Creating main_frame-only redirect rule for domain '${primaryDomain}'.`
       )
       dnrRules.push(
-        createRuleEntry({
-          urlFilter: `*://${primaryDomain}/*`,
-        })
+        createRuleEntry(
+          {
+            urlFilter: `*://${primaryDomain}/*`,
+          },
+          "redirect",
+          MAIN_FRAME_ONLY
+        )
       )
       if (primaryDomain !== wwwDomain) {
         console.log(
-          `Regel ${index} (${rule.site}): Erstelle generelle redirect Regel für www-Domain '${wwwDomain}'.`
+          `Rule ${index} (${rule.site}): Creating main_frame-only redirect rule for www-domain '${wwwDomain}'.`
         )
         dnrRules.push(
-          createRuleEntry({
-            urlFilter: `*://${wwwDomain}/*`,
-          })
+          createRuleEntry(
+            {
+              urlFilter: `*://${wwwDomain}/*`,
+            },
+            "redirect",
+            MAIN_FRAME_ONLY
+          )
         )
       }
-
       if (whitelistedPaths.length > 0) {
         whitelistedPaths.forEach((path, pathIndex) => {
-          let cleanPath = normalizePath(path)
+          let cleanPath = normalizeUrlPattern(path)
           console.log(
-            `Regel ${index} (${rule.site}): Verarbeite Whitelist-Pfad #${pathIndex}: '${path}' (cleaned: '${cleanPath}')`
+            `Rule ${index} (${rule.site}): Processing whitelist path #${pathIndex}: '${path}' (cleaned: '${cleanPath}')`
           )
 
           if (!cleanPath || (cleanPath === "/" && !(path.trim() === "/"))) {
@@ -214,7 +311,7 @@ function convertToDNRRules(storedRules) {
               cleanPath.replace(/\*/g, "") === "/"
             ) {
               console.warn(
-                `Regel ${index} (${rule.site}): Ungültiger Whitelist-Pfad '${path}' (ergab '${cleanPath}'). Übersprungen.`
+                `Rule ${index} (${rule.site}): Invalid whitelist path '${path}' (resulted in '${cleanPath}'). Skipped.`
               )
               return
             }
@@ -223,112 +320,152 @@ function convertToDNRRules(storedRules) {
           let allowPattern
           let wwwAllowPattern
 
+          // Handle query parameters by using urlFilter with wildcards
           if (cleanPath.endsWith("*")) {
             allowPattern = `*://${primaryDomain}${cleanPath}`
             wwwAllowPattern = `*://${wwwDomain}${cleanPath}`
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle 'allow' Regel (Typ 1: user wildcard) für Muster: '${allowPattern}'`
+              `Rule ${index} (${rule.site}): Creating 'allow' rule (Type 1: user wildcard) for pattern: '${allowPattern}'`
             )
           } else if (cleanPath.endsWith("/")) {
             allowPattern = `*://${primaryDomain}${cleanPath}*`
             wwwAllowPattern = `*://${wwwDomain}${cleanPath}*`
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle 'allow' Regel (Typ 2: ends with slash) für Muster: '${allowPattern}'`
+              `Rule ${index} (${rule.site}): Creating 'allow' rule (Type 2: ends with slash) for pattern: '${allowPattern}'`
+            )
+          } else if (cleanPath.includes("?")) {
+            // Special handling for query parameters - match exact pattern
+            allowPattern = `*://${primaryDomain}${cleanPath}*`
+            wwwAllowPattern = `*://${wwwDomain}${cleanPath}*`
+            console.log(
+              `Rule ${index} (${rule.site}): Creating 'allow' rule (Type 3: query parameter) for pattern: '${allowPattern}'`
             )
           } else {
+            // For path segments without query parameters, use contains matching
             allowPattern = `*://${primaryDomain}*${cleanPath}*`
             wwwAllowPattern = `*://${wwwDomain}*${cleanPath}*`
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle 'allow' Regel (Typ 3: path segment contains) für Muster: '${allowPattern}'`
+              `Rule ${index} (${rule.site}): Creating 'allow' rule (Type 4: path segment contains) for pattern: '${allowPattern}'`
             )
           }
 
-          dnrRules.push(createRuleEntry({ urlFilter: allowPattern }, "allow"))
+          // Create allow rules for main_frame navigation to whitelisted paths
+          dnrRules.push(
+            createRuleEntry(
+              { urlFilter: allowPattern },
+              "allow",
+              MAIN_FRAME_ONLY
+            )
+          )
           if (primaryDomain !== wwwDomain) {
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle 'allow' Regel für www-Muster: '${wwwAllowPattern}'`
+              `Rule ${index} (${rule.site}): Creating 'allow' rule for www-pattern: '${wwwAllowPattern}'`
             )
             dnrRules.push(
-              createRuleEntry({ urlFilter: wwwAllowPattern }, "allow")
+              createRuleEntry(
+                { urlFilter: wwwAllowPattern },
+                "allow",
+                MAIN_FRAME_ONLY
+              )
             )
           }
         })
       } else {
         console.log(
-          `Regel ${index} (${rule.site}): Whitelist-Modus aber keine Pfade. Domain bleibt durch generelle Regel blockiert.`
+          `Rule ${index} (${rule.site}): Whitelist mode but no paths. Domain remains blocked by general rule.`
         )
       }
     } else if (evaluatedSubpageMode === "blacklist") {
-      console.log(`Regel ${index} (${rule.site}): Modus 'blacklist' gewählt.`)
+      console.log(`Rule ${index} (${rule.site}): Mode 'blacklist' selected.`)
       const blacklistedPaths = rule.subpageBlacklist || []
       console.log(
-        `Regel ${index} (${rule.site}): blacklistedPaths =`,
+        `Rule ${index} (${rule.site}): blacklistedPaths =`,
         JSON.parse(JSON.stringify(blacklistedPaths))
       )
 
       if (blacklistedPaths.length === 0) {
         console.log(
-          `Regel ${index} (${rule.site}): Blacklist-Modus aber Blacklist ist leer. Keine spezifische Blockregel für Subpfade erstellt. Domain bleibt zugänglich, es sei denn, es gibt eine andere Regel.`
+          `Rule ${index} (${rule.site}): Blacklist mode but blacklist is empty. No specific block rule for subpaths created. Domain remains accessible unless there's another rule.`
         )
       } else {
         blacklistedPaths.forEach((path, pathIndex) => {
           const originalUserPath = path
           console.log(
-            `Regel ${index} (${rule.site}): Verarbeite Blacklist-Pfad #${pathIndex}: '${originalUserPath}'`
+            `Rule ${index} (${rule.site}): Processing blacklist path #${pathIndex}: '${originalUserPath}'`
           )
 
           if (!originalUserPath || originalUserPath.trim() === "") {
             console.warn(
-              `Regel ${index} (${rule.site}): Leeren Blacklist-Pfad übersprungen.`
+              `Rule ${index} (${rule.site}): Empty blacklist path skipped.`
             )
             return
           }
 
-          let preparedPath = normalizePath(originalUserPath)
+          let preparedPath = normalizeUrlPattern(originalUserPath)
           let filterPattern
           let wwwFilterPattern
 
+          // Handle query parameters for blacklist patterns
           if (preparedPath.endsWith("*")) {
             filterPattern = `*://${primaryDomain}${preparedPath}`
             wwwFilterPattern = `*://${wwwDomain}${preparedPath}`
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle redirect Regel (Blacklist Typ 1: user wildcard) für Muster '${filterPattern}'`
+              `Rule ${index} (${rule.site}): Creating redirect rule (Blacklist Type 1: user wildcard) for pattern '${filterPattern}'`
             )
           } else if (preparedPath.endsWith("/")) {
             filterPattern = `*://${primaryDomain}${preparedPath}*`
             wwwFilterPattern = `*://${wwwDomain}${preparedPath}*`
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle redirect Regel (Blacklist Typ 2: ends with slash) für Muster '${filterPattern}'`
+              `Rule ${index} (${rule.site}): Creating redirect rule (Blacklist Type 2: ends with slash) for pattern '${filterPattern}'`
+            )
+          } else if (preparedPath.includes("?")) {
+            // Special handling for query parameters in blacklist
+            filterPattern = `*://${primaryDomain}${preparedPath}*`
+            wwwFilterPattern = `*://${wwwDomain}${preparedPath}*`
+            console.log(
+              `Rule ${index} (${rule.site}): Creating redirect rule (Blacklist Type 3: query parameter) for pattern '${filterPattern}'`
             )
           } else {
             filterPattern = `*://${primaryDomain}*${preparedPath}*`
             wwwFilterPattern = `*://${wwwDomain}*${preparedPath}*`
             console.log(
-              `Regel ${index} (${rule.site}): Erstelle redirect Regel (Blacklist Typ 3: path segment contains) für Muster '${filterPattern}'`
+              `Rule ${index} (${rule.site}): Creating redirect rule (Blacklist Type 4: path segment contains) for pattern '${filterPattern}'`
             )
           }
 
-          dnrRules.push(createRuleEntry({ urlFilter: filterPattern }))
+          // For blacklist mode: Block all resource types for the blacklisted paths
+          dnrRules.push(
+            createRuleEntry(
+              { urlFilter: filterPattern },
+              "redirect",
+              ALL_RESOURCE_TYPES
+            )
+          )
           if (primaryDomain !== wwwDomain) {
-            dnrRules.push(createRuleEntry({ urlFilter: wwwFilterPattern }))
+            dnrRules.push(
+              createRuleEntry(
+                { urlFilter: wwwFilterPattern },
+                "redirect",
+                ALL_RESOURCE_TYPES
+              )
+            )
           }
         })
       }
     } else {
       console.warn(
-        `Regel ${index} (${rule.site}): Unbekannter subpageMode '${evaluatedSubpageMode}'. Keine Regel erstellt.`
+        `Rule ${index} (${rule.site}): Unknown subpageMode '${evaluatedSubpageMode}'. No rule created.`
       )
     }
   })
-
   console.log(
-    "Konvertierte DNR Regeln (vor Rückgabe):",
+    "Converted DNR rules (before return):",
     JSON.parse(JSON.stringify(dnrRules))
   )
   return dnrRules
 }
 
-// Aktualisiert die Regeln im declarativeNetRequest System
+// Updates rules in the declarativeNetRequest system
 async function updateDeclarativeNetRequestRules() {
   const newDNRRules = convertToDNRRules(currentRules)
 
@@ -465,11 +602,7 @@ function getActiveBlockingRuleForUrl(urlString, storedRules) {
     const pathname = parsedUrl.pathname
 
     for (const rule of storedRules) {
-      if (
-        !rule.site ||
-        typeof rule.site !== "string" ||
-        rule.site.trim() === ""
-      ) {
+      if (!validateDomainInput(rule.site)) {
         continue
       }
       if (!isRuleTimeActive(rule, currentTimeInMinutes)) {
@@ -486,7 +619,7 @@ function getActiveBlockingRuleForUrl(urlString, storedRules) {
 
       if (evaluatedSubpageMode === "none") {
         console.log(
-          `getActiveBlockingRuleForUrl: Regel 'none' matcht ${urlString}`,
+          `getActiveBlockingRuleForUrl: Rule 'none' matches ${urlString}`,
           rule
         )
         return { shouldBlock: true, matchingRule: rule }
@@ -495,47 +628,26 @@ function getActiveBlockingRuleForUrl(urlString, storedRules) {
         let isPathWhitelisted = false
         if (whitelistedPaths.length === 0) {
           console.log(
-            `getActiveBlockingRuleForUrl: Regel 'whitelist' (leere Liste) blockiert ${urlString}`,
+            `getActiveBlockingRuleForUrl: Rule 'whitelist' (empty list) blocks ${urlString}`,
             rule
           )
           return { shouldBlock: true, matchingRule: rule }
         }
-
         for (const whitelistedPath of whitelistedPaths) {
-          const cleanWhitelistedPath = normalizePath(whitelistedPath)
+          const cleanWhitelistedPath = normalizeUrlPattern(whitelistedPath)
 
-          if (cleanWhitelistedPath === "/" && pathname === "/") {
+          // Use the new URL matching function that supports query parameters
+          if (urlMatchesPattern(urlString, cleanWhitelistedPath)) {
             isPathWhitelisted = true
+            console.log(
+              `getActiveBlockingRuleForUrl: URL ${urlString} matches whitelist pattern '${cleanWhitelistedPath}'`
+            )
             break
           }
-          if (
-            cleanWhitelistedPath === "/" ||
-            cleanWhitelistedPath.replace(/\*/g, "") === ""
-          )
-            continue
-
-          if (cleanWhitelistedPath.endsWith("*")) {
-            const prefix = cleanWhitelistedPath.slice(0, -1)
-            if (pathname.startsWith(prefix)) {
-              isPathWhitelisted = true
-              break
-            }
-          } else if (cleanWhitelistedPath.endsWith("/")) {
-            if (pathname.startsWith(cleanWhitelistedPath)) {
-              isPathWhitelisted = true
-              break
-            }
-          } else {
-            if (pathname.includes(cleanWhitelistedPath)) {
-              isPathWhitelisted = true
-              break
-            }
-          }
         }
-
         if (!isPathWhitelisted) {
           console.log(
-            `getActiveBlockingRuleForUrl: Regel 'whitelist' blockiert ${urlString} (nicht auf Whitelist)`,
+            `getActiveBlockingRuleForUrl: Rule 'whitelist' blocks ${urlString} (not on whitelist)`,
             rule
           )
           return { shouldBlock: true, matchingRule: rule }
@@ -546,46 +658,15 @@ function getActiveBlockingRuleForUrl(urlString, storedRules) {
           continue
         }
         for (const blacklistedPath of blacklistedPaths) {
-          const cleanBlacklistedPath = normalizePath(blacklistedPath)
+          const cleanBlacklistedPath = normalizeUrlPattern(blacklistedPath)
 
-          if (cleanBlacklistedPath === "/" && pathname === "/") {
+          // Use the new URL matching function that supports query parameters
+          if (urlMatchesPattern(urlString, cleanBlacklistedPath)) {
             console.log(
-              `getActiveBlockingRuleForUrl: Regel 'blacklist' blockiert ${urlString} (matcht ${cleanBlacklistedPath})`,
+              `getActiveBlockingRuleForUrl: Rule 'blacklist' blocks ${urlString} (matches pattern ${cleanBlacklistedPath})`,
               rule
             )
             return { shouldBlock: true, matchingRule: rule }
-          }
-          if (
-            cleanBlacklistedPath === "/" ||
-            cleanBlacklistedPath.replace(/\*/g, "") === ""
-          )
-            continue
-
-          if (cleanBlacklistedPath.endsWith("*")) {
-            const prefix = cleanBlacklistedPath.slice(0, -1)
-            if (pathname.startsWith(prefix)) {
-              console.log(
-                `getActiveBlockingRuleForUrl: Regel 'blacklist' blockiert ${urlString} (matcht wildcard ${cleanBlacklistedPath})`,
-                rule
-              )
-              return { shouldBlock: true, matchingRule: rule }
-            }
-          } else if (cleanBlacklistedPath.endsWith("/")) {
-            if (pathname.startsWith(cleanBlacklistedPath)) {
-              console.log(
-                `getActiveBlockingRuleForUrl: Regel 'blacklist' blockiert ${urlString} (matcht Verzeichnis ${cleanBlacklistedPath})`,
-                rule
-              )
-              return { shouldBlock: true, matchingRule: rule }
-            }
-          } else {
-            if (pathname.includes(cleanBlacklistedPath)) {
-              console.log(
-                `getActiveBlockingRuleForUrl: Regel 'blacklist' blockiert ${urlString} (enthält ${cleanBlacklistedPath})`,
-                rule
-              )
-              return { shouldBlock: true, matchingRule: rule }
-            }
           }
         }
       }

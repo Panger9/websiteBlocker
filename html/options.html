@@ -30,6 +30,8 @@
           <ul id="alwaysBlockList" class="rules-list">
             <!-- Dynamically generated list items will include an edit button -->
           </ul>
+
+          <!-- Subpage configuration section will be dynamically inserted here when editing always-block rules -->
         </section>
 
         <hr class="section-divider" />
@@ -56,122 +58,154 @@
           </div>
           <div class="button-group" id="timedBlockButtons">
             <button id="addTimedBlock">Add</button>
-            <!-- Global saveChangesButton and cancelEditButton will be placed here or
-               elsewhere centrally by JS when a form is being edited -->
           </div>
           <ul id="timedBlockList" class="rules-list">
             <!-- Dynamically generated list items will include an edit button -->
           </ul>
+
+          <!-- Subpage configuration section will be dynamically inserted here when editing timed-block rules -->
         </section>
 
-        <!-- New Section for Subpage Rule Editing (initially hidden) -->
-        <section
-          class="form-section"
-          id="subpage-rules-edit-section"
-          style="display: none"
-        >
-          <h3>
-            Subpage Exceptions for
-            <span id="editingDomainName" style="font-weight: bold"></span>
-          </h3>
-          <p>
-            Manage specific subpages for the domain you are currently editing.
-          </p>
+        <!-- Template for Subpage Rule Editing (will be cloned and moved dynamically) -->
+        <template id="subpage-rules-template">
+          <section
+            class="form-section subpage-rules-edit-section"
+            style="
+              display: none;
+              margin-top: 20px;
+              border: 2px solid #007cba;
+              border-radius: 8px;
+              padding: 20px;
+              background-color: #f8f9fa;
+            "
+          >
+            <h3>
+              Subpage Exceptions for
+              <span
+                class="editingDomainName"
+                style="font-weight: bold; color: #007cba"
+              ></span>
+            </h3>
+            <p>
+              Manage specific subpages for the domain you are currently editing.
+            </p>
 
-          <div class="input-group">
-            <label>
-              <input type="radio" name="subpageMode" value="none" checked />
-              No subpage exceptions (block entire domain as specified)
-            </label>
-          </div>
-          <div class="input-group">
-            <label>
-              <input type="radio" name="subpageMode" value="whitelist" />
-              Whitelist specific subpages (block domain, but allow these)
-            </label>
+            <div class="input-group">
+              <label>
+                <input type="radio" name="subpageMode" value="none" checked />
+                No subpage exceptions (block entire domain as specified)
+              </label>
+            </div>
+            <div class="input-group">
+              <label>
+                <input type="radio" name="subpageMode" value="whitelist" />
+                Whitelist specific subpages (block domain, but allow these)
+              </label>
+              <div
+                class="subpage-whitelist-explanation subpage-explanation"
+                style="
+                  display: none;
+                  font-size: 0.9em;
+                  margin-left: 20px;
+                  margin-top: 5px;
+                "
+              >
+                <p>
+                  <strong>Whitelist Mode:</strong> The entire domain
+                  <span class="editing-main-url-display"></span> will be blocked
+                  according to the main rule (always or timed). However, the
+                  subpages listed below will be ACCESSIBLE.
+                </p>
+              </div>
+            </div>
+            <div class="input-group">
+              <label>
+                <input type="radio" name="subpageMode" value="blacklist" />
+                Blacklist specific subpages (allow domain, but block these)
+              </label>
+              <div
+                class="subpage-blacklist-explanation subpage-explanation"
+                style="
+                  display: none;
+                  font-size: 0.9em;
+                  margin-left: 20px;
+                  margin-top: 5px;
+                "
+              >
+                <p>
+                  <strong>Blacklist Mode:</strong> The main domain
+                  <span class="editing-main-url-display"></span> will generally
+                  be ACCESSIBLE (unless covered by another rule). ONLY the
+                  specific subpages listed below will be BLOCKED.
+                </p>
+              </div>
+            </div>
+
             <div
-              id="subpage-whitelist-explanation"
-              class="subpage-explanation"
+              class="subpage-whitelist-management"
+              style="display: none; margin-top: 15px"
+            >
+              <h4>
+                Whitelisted Subpages (e.g., /important-article or
+                /tools/specific-tool)
+              </h4>
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="subpageWhitelistInput"
+                  placeholder="/subpage-path"
+                />
+                <button class="addSubpageWhitelist subpage-button">
+                  Add to Whitelist
+                </button>
+              </div>
+              <ul class="subpageWhitelistUI rules-list subpage-list"></ul>
+            </div>
+
+            <div
+              class="subpage-blacklist-management"
+              style="display: none; margin-top: 15px"
+            >
+              <h4>
+                Blacklisted Subpages (e.g., /distracting-feed or /games-section)
+              </h4>
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="subpageBlacklistInput"
+                  placeholder="/subpage-path"
+                />
+                <button class="addSubpageBlacklist subpage-button">
+                  Add to Blacklist
+                </button>
+              </div>
+              <ul class="subpageBlacklistUI rules-list subpage-list"></ul>
+            </div>
+
+            <!-- Save/Cancel buttons now inside the subpage configuration -->
+            <div
+              class="button-group"
               style="
-                display: none;
-                font-size: 0.9em;
-                margin-left: 20px;
-                margin-top: 5px;
+                margin-top: 20px;
+                border-top: 1px solid #ddd;
+                padding-top: 15px;
               "
             >
-              <p>
-                <strong>Whitelist Mode:</strong> The entire domain
-                <span class="editing-main-url-display"></span> will be blocked
-                according to the main rule (always or timed). However, the
-                subpages listed below will be ACCESSIBLE.
-              </p>
-            </div>
-          </div>
-          <div class="input-group">
-            <label>
-              <input type="radio" name="subpageMode" value="blacklist" />
-              Blacklist specific subpages (allow domain, but block these)
-            </label>
-            <div
-              id="subpage-blacklist-explanation"
-              class="subpage-explanation"
-              style="
-                display: none;
-                font-size: 0.9em;
-                margin-left: 20px;
-                margin-top: 5px;
-              "
-            >
-              <p>
-                <strong>Blacklist Mode:</strong> The main domain
-                <span class="editing-main-url-display"></span> will generally be
-                ACCESSIBLE (unless covered by another rule). ONLY the specific
-                subpages listed below will be BLOCKED.
-              </p>
-            </div>
-          </div>
-
-          <div
-            id="subpage-whitelist-management"
-            style="display: none; margin-top: 15px"
-          >
-            <h4>
-              Whitelisted Subpages (e.g., /important-article or
-              /tools/specific-tool)
-            </h4>
-            <div class="input-group">
-              <input
-                type="text"
-                id="subpageWhitelistInput"
-                placeholder="/subpage-path"
-              />
-              <button id="addSubpageWhitelist" class="subpage-button">
-                Add to Whitelist
+              <button
+                class="saveChangesButton"
+                style="background-color: #28a745; color: white"
+              >
+                Save Changes
+              </button>
+              <button
+                class="cancelEditButton"
+                style="background-color: #6c757d; color: white"
+              >
+                Cancel
               </button>
             </div>
-            <ul id="subpageWhitelistUI" class="rules-list subpage-list"></ul>
-          </div>
-
-          <div
-            id="subpage-blacklist-management"
-            style="display: none; margin-top: 15px"
-          >
-            <h4>
-              Blacklisted Subpages (e.g., /distracting-feed or /games-section)
-            </h4>
-            <div class="input-group">
-              <input
-                type="text"
-                id="subpageBlacklistInput"
-                placeholder="/subpage-path"
-              />
-              <button id="addSubpageBlacklist" class="subpage-button">
-                Add to Blacklist
-              </button>
-            </div>
-            <ul id="subpageBlacklistUI" class="rules-list subpage-list"></ul>
-          </div>
-        </section>
+          </section>
+        </template>
       </main>
     </div>
 

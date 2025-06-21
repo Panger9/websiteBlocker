@@ -15,6 +15,12 @@ SiteBlocker Free helps you easily block distracting websites, either permanently
 - Set custom time windows to block sites during work, study, or specific hours.
 - Supports overnight schedules (e.g., 10 PM to 7 AM).
 
+### SUBPAGE BLOCKING
+
+- Set specific subpages to be blocked or allowed per URL.
+- Example: You can block youtube shorts while allowing long form content.
+- This also works with scheduled blocking for a truly customized browsing experience.
+
 ### EASY TO USE
 
 - Quickly add, remove, or edit your blocked sites and schedules through a clean settings page.

@@ -151,11 +151,23 @@ button:active {
   transform: translateY(0px);
 }
 
+.addSubpageBlacklist,
+.addSubpageWhitelist {
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+}
+
+.addSubpageBlacklist,
+.addSubpageWhitelist {
+  background-color: var(--color-primary-hover);
+}
+
 /* Primäre Aktionsbuttons (Hinzufügen) */
 #addAlwaysBlock,
 #addTimedBlock {
   background-color: var(--color-primary);
   color: var(--color-text-light);
+  margin-top: 5px;
 }
 #addAlwaysBlock:hover,
 #addTimedBlock:hover {

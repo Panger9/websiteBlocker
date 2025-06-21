@@ -3,53 +3,38 @@
 document.addEventListener("DOMContentLoaded", () => {
   // Input fields and buttons
   const alwaysBlockInput = document.getElementById("alwaysBlockInput")
-  const addAlwaysBlockButton = document.getElementById("addAlwaysBlock") // Text from HTML
+  const addAlwaysBlockButton = document.getElementById("addAlwaysBlock")
   const alwaysBlockListUI = document.getElementById("alwaysBlockList")
 
   const timedBlockInput = document.getElementById("timedBlockInput")
   const startTimeInput = document.getElementById("startTime")
   const endTimeInput = document.getElementById("endTime")
-  const addTimedBlockButton = document.getElementById("addTimedBlock") // Text from HTML
+  const addTimedBlockButton = document.getElementById("addTimedBlock")
   const timedBlockListUI = document.getElementById("timedBlockList")
+  // Template for subpage configuration
+  const subpageTemplate = document.getElementById("subpage-rules-template")
 
-  // Subpage section elements
-  const subpageRulesEditSection = document.getElementById(
-    "subpage-rules-edit-section"
-  )
-  const editingDomainNameSpan = document.getElementById("editingDomainName")
-  const subpageModeRadios = document.querySelectorAll(
-    'input[name="subpageMode"]'
-  )
-  const subpageWhitelistExplanation = document.getElementById(
-    "subpage-whitelist-explanation"
-  )
-  const subpageBlacklistExplanation = document.getElementById(
-    "subpage-blacklist-explanation"
-  )
-  const subpageWhitelistManagementDiv = document.getElementById(
-    "subpage-whitelist-management"
-  )
-  const subpageBlacklistManagementDiv = document.getElementById(
-    "subpage-blacklist-management"
-  )
-  const subpageWhitelistInput = document.getElementById("subpageWhitelistInput")
-  const addSubpageWhitelistButton = document.getElementById(
-    "addSubpageWhitelist"
-  )
-  const subpageWhitelistUI = document.getElementById("subpageWhitelistUI")
-  const subpageBlacklistInput = document.getElementById("subpageBlacklistInput")
-  const addSubpageBlacklistButton = document.getElementById(
-    "addSubpageBlacklist"
-  )
-  const subpageBlacklistUI = document.getElementById("subpageBlacklistUI")
-  const editingMainUrlDisplays = document.querySelectorAll(
-    ".editing-main-url-display"
-  )
+  // References to the sections where subpage config will be inserted
+  const alwaysBlockSection = document.getElementById("always-block-section")
+  const timedBlockSection = document.getElementById("timed-block-section")
 
-  const globalEditButtonContainer = document.getElementById("timedBlockButtons")
-
-  let saveChangesButton
-  let cancelEditButton
+  // Current subpage configuration elements (will be set when editing)
+  let currentSubpageSection = null
+  let subpageModeRadios = null
+  let subpageWhitelistExplanation = null
+  let subpageBlacklistExplanation = null
+  let subpageWhitelistManagementDiv = null
+  let subpageBlacklistManagementDiv = null
+  let subpageWhitelistInput = null
+  let addSubpageWhitelistButton = null
+  let subpageWhitelistUI = null
+  let subpageBlacklistInput = null
+  let addSubpageBlacklistButton = null
+  let subpageBlacklistUI = null
+  let editingMainUrlDisplays = null
+  let editingDomainNameSpan = null
+  let saveChangesButton = null
+  let cancelEditButton = null
 
   let rules = []
   let editState = {
@@ -61,32 +46,139 @@ document.addEventListener("DOMContentLoaded", () => {
     subpageBlacklist: [],
   }
 
-  createGlobalEditButtons()
   loadRulesAndRender()
 
-  function createGlobalEditButtons() {
-    saveChangesButton = document.createElement("button")
-    saveChangesButton.textContent = "Save Changes" // Icon: ✓ or 💾
-    saveChangesButton.id = "saveChangesButton"
-    saveChangesButton.style.display = "none"
-    saveChangesButton.addEventListener("click", handleSaveChanges)
+  // Function to create and insert subpage configuration section
+  function createSubpageSection(targetSection) {
+    // Remove any existing subpage section
+    removeSubpageSection()
 
-    cancelEditButton = document.createElement("button")
-    cancelEditButton.textContent = "Cancel" // Icon: ✗
-    cancelEditButton.id = "cancelEditButton"
-    cancelEditButton.style.display = "none"
-    cancelEditButton.addEventListener("click", handleCancelEdit)
+    // Clone the template
+    const templateContent = subpageTemplate.content.cloneNode(true)
+    currentSubpageSection = templateContent.querySelector(
+      ".subpage-rules-edit-section"
+    )
 
-    if (globalEditButtonContainer) {
-      globalEditButtonContainer.appendChild(saveChangesButton)
-      globalEditButtonContainer.appendChild(cancelEditButton)
-    } else {
-      console.warn(
-        "Timed block button container not found for global edit buttons."
-      )
+    // Get references to the elements in the cloned template
+    subpageModeRadios = currentSubpageSection.querySelectorAll(
+      'input[name="subpageMode"]'
+    )
+    subpageWhitelistExplanation = currentSubpageSection.querySelector(
+      ".subpage-whitelist-explanation"
+    )
+    subpageBlacklistExplanation = currentSubpageSection.querySelector(
+      ".subpage-blacklist-explanation"
+    )
+    subpageWhitelistManagementDiv = currentSubpageSection.querySelector(
+      ".subpage-whitelist-management"
+    )
+    subpageBlacklistManagementDiv = currentSubpageSection.querySelector(
+      ".subpage-blacklist-management"
+    )
+    subpageWhitelistInput = currentSubpageSection.querySelector(
+      ".subpageWhitelistInput"
+    )
+    addSubpageWhitelistButton = currentSubpageSection.querySelector(
+      ".addSubpageWhitelist"
+    )
+    subpageWhitelistUI = currentSubpageSection.querySelector(
+      ".subpageWhitelistUI"
+    )
+    subpageBlacklistInput = currentSubpageSection.querySelector(
+      ".subpageBlacklistInput"
+    )
+    addSubpageBlacklistButton = currentSubpageSection.querySelector(
+      ".addSubpageBlacklist"
+    )
+    subpageBlacklistUI = currentSubpageSection.querySelector(
+      ".subpageBlacklistUI"
+    )
+    editingMainUrlDisplays = currentSubpageSection.querySelectorAll(
+      ".editing-main-url-display"
+    )
+    editingDomainNameSpan =
+      currentSubpageSection.querySelector(".editingDomainName")
+    saveChangesButton =
+      currentSubpageSection.querySelector(".saveChangesButton")
+    cancelEditButton = currentSubpageSection.querySelector(".cancelEditButton")
+
+    // Add event listeners to the new elements
+    setupSubpageEventListeners()
+
+    // Insert the section after the target section
+    targetSection.appendChild(currentSubpageSection)
+
+    return currentSubpageSection
+  }
+
+  // Function to remove existing subpage section
+  function removeSubpageSection() {
+    if (currentSubpageSection && currentSubpageSection.parentNode) {
+      currentSubpageSection.parentNode.removeChild(currentSubpageSection)
+      currentSubpageSection = null
     }
   }
 
+  // Function to setup event listeners for subpage elements
+  function setupSubpageEventListeners() {
+    if (!currentSubpageSection) return
+
+    // Save and Cancel buttons
+    saveChangesButton.addEventListener("click", handleSaveChanges)
+    cancelEditButton.addEventListener("click", handleCancelEdit)
+
+    // Subpage mode radio buttons
+    subpageModeRadios.forEach((radio) => {
+      radio.addEventListener("change", (event) => {
+        if (editState.index === -1) return
+        editState.subpageMode = event.target.value
+        updateSubpageExplanationAndInputs()
+      })
+    })
+    // Whitelist management
+    addSubpageWhitelistButton.addEventListener("click", () => {
+      if (editState.index === -1 || editState.subpageMode !== "whitelist")
+        return
+      const subpage = subpageWhitelistInput.value.trim()
+      if (subpage && !editState.subpageWhitelist.includes(subpage)) {
+        if (!subpage.startsWith("/")) {
+          alert(
+            "Subpage path must start with a '/' (e.g., /articles/technology)."
+          )
+          return
+        }
+        editState.subpageWhitelist.push(subpage)
+        subpageWhitelistInput.value = ""
+        renderSubpageLists()
+      } else if (!subpage) {
+        alert("Please enter a subpage path.")
+      } else {
+        alert("This subpage is already in the whitelist.")
+      }
+    })
+
+    // Blacklist management
+    addSubpageBlacklistButton.addEventListener("click", () => {
+      if (editState.index === -1 || editState.subpageMode !== "blacklist")
+        return
+      const subpage = subpageBlacklistInput.value.trim()
+      if (subpage && !editState.subpageBlacklist.includes(subpage)) {
+        if (!subpage.startsWith("/")) {
+          alert(
+            "Subpage path must start with a '/' (e.g., /games or /forum/offtopic)."
+          )
+          return
+        }
+        editState.subpageBlacklist.push(subpage)
+        subpageBlacklistInput.value = ""
+        renderSubpageLists()
+      } else if (!subpage) {
+        alert("Please enter a subpage path.")
+      } else {
+        alert("This subpage is already in the blacklist.")
+      }
+    })
+  }
   addAlwaysBlockButton.addEventListener("click", () => {
     if (editState.index !== -1) return
     const site = alwaysBlockInput.value.trim().toLowerCase()
@@ -134,8 +226,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (editState.type === "always") {
       const site = alwaysBlockInput.value.trim().toLowerCase()
-      if (!site) {
-        alert("Website URL cannot be empty.")
+      if (!validateDomainInput(site)) {
+        alert(
+          "Invalid domain format. Please enter a valid domain name (e.g., example.com)."
+        )
         isValid = false
       } else {
         updatedRuleData.site = site
@@ -145,8 +239,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const startTime = startTimeInput.value
       const endTime = endTimeInput.value
 
-      if (!site || !startTime || !endTime) {
-        alert("All fields for time-scheduled blocking must be filled.")
+      if (!validateDomainInput(site) || !startTime || !endTime) {
+        if (!validateDomainInput(site)) {
+          alert(
+            "Invalid domain format. Please enter a valid domain name (e.g., example.com)."
+          )
+        } else {
+          alert("All fields for time-scheduled blocking must be filled.")
+        }
         isValid = false
       } else if (!isTimeFormatValid(startTime) || !isTimeFormatValid(endTime)) {
         alert("Invalid time format. Please use HH:MM.")
@@ -284,7 +384,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     })
   }
-
   function enterEditMode(index) {
     const ruleToEdit = rules[index]
     if (!ruleToEdit) return
@@ -306,10 +405,13 @@ document.addEventListener("DOMContentLoaded", () => {
         : [],
     }
 
+    // Create subpage section in the appropriate location
+    const targetSection =
+      editState.type === "always" ? alwaysBlockSection : timedBlockSection
+    createSubpageSection(targetSection)
+
     addAlwaysBlockButton.style.display = "none"
     addTimedBlockButton.style.display = "none"
-    if (saveChangesButton) saveChangesButton.style.display = "inline-block"
-    if (cancelEditButton) cancelEditButton.style.display = "inline-block"
 
     if (editState.type === "always") {
       alwaysBlockInput.value = ruleToEdit.site
@@ -338,10 +440,9 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSubpageExplanationAndInputs()
     renderSubpageLists()
 
-    subpageRulesEditSection.style.display = "block"
+    currentSubpageSection.style.display = "block"
     renderLists()
   }
-
   function exitEditMode(performRender = true) {
     alwaysBlockInput.value = ""
     timedBlockInput.value = ""
@@ -350,16 +451,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     addAlwaysBlockButton.style.display = "inline-block"
     addTimedBlockButton.style.display = "inline-block"
-    if (saveChangesButton) saveChangesButton.style.display = "none"
-    if (cancelEditButton) cancelEditButton.style.display = "none"
 
     alwaysBlockInput.disabled = false
     timedBlockInput.disabled = false
     startTimeInput.disabled = false
     endTimeInput.disabled = false
 
-    subpageRulesEditSection.style.display = "none"
-    editingDomainNameSpan.textContent = ""
+    // Remove the subpage section
+    removeSubpageSection()
+
     editState = {
       index: -1,
       type: "",
@@ -374,15 +474,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  subpageModeRadios.forEach((radio) => {
-    radio.addEventListener("change", (event) => {
-      if (editState.index === -1) return
-      editState.subpageMode = event.target.value
-      updateSubpageExplanationAndInputs()
-    })
-  })
-
   function updateSubpageExplanationAndInputs() {
+    if (!currentSubpageSection) return
+
     const currentMainUrl = editState.originalRule
       ? editState.originalRule.site
       : "this domain"
@@ -400,43 +494,9 @@ document.addEventListener("DOMContentLoaded", () => {
       editState.subpageMode === "blacklist" ? "block" : "none"
   }
 
-  addSubpageWhitelistButton.addEventListener("click", () => {
-    if (editState.index === -1 || editState.subpageMode !== "whitelist") return
-    const subpage = subpageWhitelistInput.value.trim()
-    if (subpage && !editState.subpageWhitelist.includes(subpage)) {
-      if (!subpage.startsWith("/")) {
-        alert(
-          "Subpage path must start with a '/' (e.g., /articles/technology)."
-        )
-        return
-      }
-      editState.subpageWhitelist.push(subpage)
-      subpageWhitelistInput.value = ""
-      renderSubpageLists()
-    } else if (editState.subpageWhitelist.includes(subpage)) {
-      alert("This subpage is already in the whitelist.")
-    }
-  })
-
-  addSubpageBlacklistButton.addEventListener("click", () => {
-    if (editState.index === -1 || editState.subpageMode !== "blacklist") return
-    const subpage = subpageBlacklistInput.value.trim()
-    if (subpage && !editState.subpageBlacklist.includes(subpage)) {
-      if (!subpage.startsWith("/")) {
-        alert(
-          "Subpage path must start with a '/' (e.g., /games or /forum/offtopic)."
-        )
-        return
-      }
-      editState.subpageBlacklist.push(subpage)
-      subpageBlacklistInput.value = ""
-      renderSubpageLists()
-    } else if (editState.subpageBlacklist.includes(subpage)) {
-      alert("This subpage is already in the blacklist.")
-    }
-  })
-
   function renderSubpageLists() {
+    if (!currentSubpageSection) return
+
     subpageWhitelistUI.innerHTML = ""
     editState.subpageWhitelist.forEach((path, idx) => {
       const li = document.createElement("li")
@@ -467,15 +527,57 @@ document.addEventListener("DOMContentLoaded", () => {
       subpageBlacklistUI.appendChild(li)
     })
   }
-
   function isTimeFormatValid(time) {
     return /^([01]\d|2[0-3]):([0-5]\d)$/.test(time)
+  }
+
+  // Input validation helper function
+  function validateDomainInput(domain) {
+    if (!domain || typeof domain !== "string") {
+      return false
+    }
+
+    const trimmedDomain = domain.trim().toLowerCase()
+
+    if (trimmedDomain === "") {
+      return false
+    }
+
+    // Basic domain validation regex
+    const domainRegex =
+      /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
+
+    if (!domainRegex.test(trimmedDomain)) {
+      return false
+    }
+
+    // Additional checks for common invalid patterns
+    if (
+      trimmedDomain.includes("..") ||
+      trimmedDomain.startsWith(".") ||
+      trimmedDomain.endsWith(".")
+    ) {
+      return false
+    }
+
+    return true
   }
 
   function validateAndAddRule(ruleData) {
     ruleData.subpageMode = ruleData.subpageMode || "none"
     ruleData.subpageWhitelist = ruleData.subpageWhitelist || []
     ruleData.subpageBlacklist = ruleData.subpageBlacklist || []
+
+    // Validate and sanitize domain input
+    if (!validateDomainInput(ruleData.site)) {
+      alert(
+        "Invalid domain format. Please enter a valid domain name (e.g., example.com)."
+      )
+      return false
+    }
+
+    // Sanitize the domain
+    ruleData.site = ruleData.site.trim().toLowerCase()
 
     if (ruleData.type === "always") {
       if (!ruleData.site) {
