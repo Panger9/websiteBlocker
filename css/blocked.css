@@ -1,0 +1,143 @@
+:root {
+  --bg-top: #efe0d6;
+  --bg-bottom: #f7efe6;
+  --surface: rgba(255, 250, 246, 0.92);
+  --border: rgba(99, 52, 42, 0.14);
+  --text: #2e1b16;
+  --text-soft: #73534b;
+  --danger: #9f3b2e;
+  --danger-soft: rgba(159, 59, 46, 0.12);
+  --brand: #1f4d42;
+  --radius-lg: 30px;
+  --radius-md: 18px;
+  --shadow: 0 24px 70px rgba(75, 34, 18, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.7), transparent 30%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+}
+
+.blocked-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.blocked-card {
+  width: min(720px, 100%);
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.blocked-kicker {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+h1 {
+  margin: 0;
+  font-family: "Aptos Display", "Trebuchet MS", sans-serif;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1;
+}
+
+.blocked-copy,
+.detail-note {
+  color: var(--text-soft);
+}
+
+.blocked-copy {
+  margin: 14px 0 24px;
+  font-size: 1.05rem;
+}
+
+.blocked-detail {
+  padding: 18px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(99, 52, 42, 0.1);
+}
+
+.detail-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+.detail-value {
+  margin: 0;
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+code.detail-value {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.blocked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.primary-link,
+.secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-link {
+  background: var(--brand);
+  color: #fff8f1;
+}
+
+.secondary-link {
+  border: none;
+  background: rgba(31, 77, 66, 0.1);
+  color: var(--brand);
+}
+
+@media (max-width: 640px) {
+  .blocked-card {
+    padding: 22px;
+  }
+
+  .blocked-actions {
+    flex-direction: column;
+  }
+}

@@ -3,68 +3,41 @@
   <head>
     <title>Site Blocked</title>
     <meta charset="UTF-8" />
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial, sans-serif;
-        text-align: center;
-        padding-top: 50px;
-        background-color: #ffebee; /* Light red background for blocked page */
-        color: #c62828; /* Darker red text */
-        margin: 0;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-      }
-      .container {
-        background-color: #fff;
-        padding: 30px 40px;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        max-width: 500px;
-      }
-      h1 {
-        font-size: 2.2em;
-        margin-bottom: 15px;
-      }
-      p {
-        font-size: 1.1em;
-        line-height: 1.6;
-        margin-bottom: 25px;
-      }
-      .button-container {
-        margin-top: 20px;
-      }
-      a,
-      .back-button {
-        /* Apply similar styling to the new button */
-        display: inline-block;
-        padding: 10px 20px;
-        background-color: #007aff; /* Primary blue */
-        color: white;
-        text-decoration: none;
-        border-radius: 5px;
-        font-weight: 500;
-        transition: background-color 0.2s;
-      }
-      a:hover,
-      .back-button:hover {
-        /* Apply similar hover styling */
-        background-color: #0056b3; /* Darker blue */
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="../css/blocked.css" />
   </head>
   <body>
-    <div class="container">
-      <h1>Access Blocked</h1>
-      <p>This page has been blocked by your SiteBlocker Free extension.</p>
-      <p><a href="#" id="openOptions">Change Settings</a></p>
-      <div class="button-container">
-        <button id="goBackButton" class="back-button">Go Back</button>
-      </div>
-    </div>
+    <main class="blocked-shell">
+      <section class="blocked-card">
+        <p class="blocked-kicker">SiteBlocker active</p>
+        <h1>Access blocked</h1>
+        <p class="blocked-copy">
+          This request matched one of your blocking rules.
+        </p>
+
+        <div class="blocked-detail">
+          <span class="detail-label">Blocked destination</span>
+          <code id="blockedUrl" class="detail-value"></code>
+        </div>
+
+        <div class="blocked-detail">
+          <span class="detail-label">Applied rule</span>
+          <p id="ruleSummary" class="detail-value">
+            This page was blocked by your current SiteBlocker rule.
+          </p>
+          <p id="ruleSchedule" class="detail-note"></p>
+        </div>
+
+        <div class="blocked-actions">
+          <a href="#" id="openOptions" class="primary-link">Review rules</a>
+          <button type="button" id="goBackButton" class="secondary-link">
+            Go back
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script src="../js/rule-engine.js"></script>
     <script src="../js/blocked.js"></script>
   </body>
 </html>

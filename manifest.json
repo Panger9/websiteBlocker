@@ -21,7 +21,12 @@
   "options_page": "html/options.html",
   "web_accessible_resources": [
     {
-      "resources": ["html/blocked.html", "js/blocked.js"],
+      "resources": [
+        "html/blocked.html",
+        "js/blocked.js",
+        "js/rule-engine.js",
+        "css/blocked.css"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
