@@ -9,24 +9,37 @@
   <body>
     <main class="blocked-shell">
       <section class="blocked-card">
-        <p class="blocked-kicker">SiteBlocker active</p>
-        <h1>Access blocked</h1>
-        <p class="blocked-copy">
-          This request matched one of your blocking rules.
+        <p class="blocked-eyebrow">SiteBlocker Free</p>
+        <h1>This page is blocked right now.</h1>
+        <p class="blocked-lead">
+          The current URL matched one of your rules. Review the details below
+          to see what was blocked and whether the rule ends later today.
         </p>
 
-        <div class="blocked-detail">
-          <span class="detail-label">Blocked destination</span>
-          <code id="blockedUrl" class="detail-value"></code>
+        <div class="blocked-grid">
+          <section class="detail-card">
+            <p class="detail-label">Blocked URL</p>
+            <code id="blockedUrl" class="detail-code">
+              Blocked destination unavailable for this redirect.
+            </code>
+          </section>
+
+          <section class="detail-card">
+            <p class="detail-label">Active rule</p>
+            <p id="ruleSummary" class="detail-copy">
+              This page was blocked by your current SiteBlocker rule.
+            </p>
+            <p id="ruleSchedule" class="detail-note"></p>
+          </section>
         </div>
 
-        <div class="blocked-detail">
-          <span class="detail-label">Applied rule</span>
-          <p id="ruleSummary" class="detail-value">
-            This page was blocked by your current SiteBlocker rule.
+        <aside class="support-card">
+          <p class="support-label">Need to change it?</p>
+          <p class="support-copy">
+            Open your rules to adjust the domain, schedule or path list. If the
+            rule is correct, simply go back and continue with another page.
           </p>
-          <p id="ruleSchedule" class="detail-note"></p>
-        </div>
+        </aside>
 
         <div class="blocked-actions">
           <a href="#" id="openOptions" class="primary-link">Review rules</a>

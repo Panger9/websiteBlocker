@@ -13,6 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const elements = {
     formTitle: document.getElementById("editorTitle"),
     formHint: document.getElementById("editorHint"),
+    editorStateLabel: document.getElementById("editorStateLabel"),
+    draftSummaryTitle: document.getElementById("draftSummaryTitle"),
+    draftSummaryCopy: document.getElementById("draftSummaryCopy"),
     typeRadios: Array.from(document.querySelectorAll('input[name="ruleType"]')),
     domainInput: document.getElementById("domainInput"),
     startTimeInput: document.getElementById("startTime"),
@@ -38,6 +41,9 @@ document.addEventListener("DOMContentLoaded", () => {
     scheduleError: document.getElementById("scheduleError"),
     subpageError: document.getElementById("subpageError"),
     patternHint: document.getElementById("patternHint"),
+    totalRulesCount: document.getElementById("totalRulesCount"),
+    alwaysRulesCount: document.getElementById("alwaysRulesCount"),
+    timedRulesCount: document.getElementById("timedRulesCount"),
   }
 
   const state = {
@@ -66,6 +72,8 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.typeRadios.forEach((radio) => {
       radio.addEventListener("change", () => {
         state.draft.type = radio.value
+        clearFieldError(elements.scheduleError)
+        clearStatus()
         renderEditor()
       })
     })
@@ -74,6 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
       radio.addEventListener("change", () => {
         state.draft.subpageMode = radio.value
         clearFieldError(elements.subpageError)
+        clearStatus()
         renderEditor()
       })
     })
@@ -82,18 +91,21 @@ document.addEventListener("DOMContentLoaded", () => {
       state.draft.site = elements.domainInput.value
       clearFieldError(elements.siteError)
       clearStatus()
+      renderDraftSummary()
     })
 
     elements.startTimeInput.addEventListener("input", () => {
       state.draft.startTime = elements.startTimeInput.value
       clearFieldError(elements.scheduleError)
       clearStatus()
+      renderDraftSummary()
     })
 
     elements.endTimeInput.addEventListener("input", () => {
       state.draft.endTime = elements.endTimeInput.value
       clearFieldError(elements.scheduleError)
       clearStatus()
+      renderDraftSummary()
     })
 
     elements.whitelistAddButton.addEventListener("click", () => {
@@ -102,6 +114,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     elements.blacklistAddButton.addEventListener("click", () => {
       addPattern("blacklist")
+    })
+
+    elements.whitelistInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault()
+        addPattern("whitelist")
+      }
+    })
+
+    elements.blacklistInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault()
+        addPattern("blacklist")
+      }
     })
 
     elements.saveButton.addEventListener("click", handleSubmit)
@@ -151,7 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!result.valid) {
       renderValidation(result.errors)
-      showStatus("Fix the highlighted fields before saving.", "error")
+      showStatus("Fix the highlighted fields before saving this rule.", "error")
       return
     }
 
@@ -160,7 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showStatus("Rule updated.", "success")
     } else {
       state.rules.unshift(result.normalizedRule)
-      showStatus("Rule created.", "success")
+      showStatus("Rule saved.", "success")
     }
 
     persistRules()
@@ -189,7 +215,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (state.draft[targetKey].includes(validation.normalized)) {
-      setFieldError(elements.subpageError, "That pattern is already listed.")
+      setFieldError(elements.subpageError, "That path is already listed.")
       return
     }
 
@@ -197,6 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
     input.value = ""
     renderPatternLists()
     updatePatternHint()
+    renderDraftSummary()
   }
 
   function removePattern(mode, pattern) {
@@ -204,6 +231,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.draft[key] = state.draft[key].filter((entry) => entry !== pattern)
     renderPatternLists()
     updatePatternHint()
+    renderDraftSummary()
   }
 
   function startEdit(index) {
@@ -211,7 +239,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.editingIndex = index
     state.draft = normalizeRule(state.rules[index])
     clearValidation()
+    clearStatus()
     renderEditor()
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   function resetEditor(clearMessage = true) {
@@ -230,12 +260,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const isScheduled = state.draft.type === RULE_TYPES.TIMED
     const isEditing = state.editorMode === "edit"
 
+    elements.editorStateLabel.textContent = isEditing
+      ? "Editing existing rule"
+      : "Creating a new rule"
     elements.formTitle.textContent = isEditing
       ? "Edit blocking rule"
-      : "Create a new blocking rule"
+      : "Create a blocking rule"
     elements.formHint.textContent = isEditing
-      ? "Adjust the domain, schedule and subpage strategy in one place."
-      : "Block an entire domain or make it more precise with allowed or blocked paths."
+      ? "Adjust the domain, schedule or path rules, then save the updated version."
+      : "Create a simple domain rule or make it precise with allowed or blocked paths."
 
     elements.typeRadios.forEach((radio) => {
       radio.checked = radio.value === state.draft.type
@@ -251,11 +284,12 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.timeFields.hidden = !isScheduled
     elements.whitelistPanel.hidden = state.draft.subpageMode !== SUBPAGE_MODES.WHITELIST
     elements.blacklistPanel.hidden = state.draft.subpageMode !== SUBPAGE_MODES.BLACKLIST
-    elements.saveButton.textContent = isEditing ? "Save changes" : "Add rule"
+    elements.saveButton.textContent = isEditing ? "Save changes" : "Save rule"
     elements.cancelButton.hidden = !isEditing
 
     renderPatternLists()
     updatePatternHint()
+    renderDraftSummary()
   }
 
   function renderPatternLists() {
@@ -279,8 +313,8 @@ document.addEventListener("DOMContentLoaded", () => {
       empty.className = "pattern-empty"
       empty.textContent =
         mode === "whitelist"
-          ? "No allowed paths yet."
-          : "No blocked paths yet."
+          ? "No allowed paths added yet."
+          : "No blocked paths added yet."
       container.appendChild(empty)
       return
     }
@@ -306,42 +340,70 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderRules() {
     elements.rulesList.innerHTML = ""
     elements.emptyState.hidden = state.rules.length > 0
+    renderDashboardStats()
 
     state.rules.forEach((rule, index) => {
       const summary = getRuleSummary(rule)
       const card = document.createElement("article")
       card.className = "rule-card"
 
-      const header = document.createElement("div")
-      header.className = "rule-card-header"
+      const topline = document.createElement("div")
+      topline.className = "rule-topline"
 
       const titleWrap = document.createElement("div")
+      titleWrap.className = "rule-title-wrap"
+
       const domain = document.createElement("h3")
-      domain.className = "rule-domain"
+      domain.className = "rule-title"
       domain.textContent = rule.site
 
-      const subtitle = document.createElement("p")
-      subtitle.className = "rule-meta"
-      subtitle.textContent = summary.scheduleLabel
+      const schedule = document.createElement("p")
+      schedule.className = "rule-schedule"
+      schedule.textContent = summary.scheduleLabel
 
-      titleWrap.append(domain, subtitle)
+      titleWrap.append(domain, schedule)
 
-      const badgeRow = document.createElement("div")
-      badgeRow.className = "badge-row"
-      badgeRow.append(
-        createBadge(summary.typeLabel, "type"),
-        createBadge(summary.modeLabel, "mode"),
-        createBadge(summary.details, "detail")
+      const tags = document.createElement("div")
+      tags.className = "rule-tags"
+      tags.append(
+        createTag(summary.typeLabel, "type"),
+        createTag(summary.modeLabel, "mode"),
+        createTag(summary.details, "detail")
       )
 
-      header.append(titleWrap, badgeRow)
+      topline.append(titleWrap, tags)
 
-      const preview = document.createElement("p")
-      preview.className = "rule-preview"
-      preview.textContent =
-        summary.previewPatterns.length > 0
-          ? `Preview: ${summary.previewPatterns.join("  •  ")}`
-          : "Blocks the entire domain."
+      const summaryText = document.createElement("p")
+      summaryText.className = "rule-summary"
+      summaryText.textContent = buildRuleNarrative(rule)
+
+      const metaGrid = document.createElement("div")
+      metaGrid.className = "rule-meta-grid"
+      metaGrid.append(
+        createMetaCard(
+          "Active",
+          summary.scheduleLabel,
+          rule.type === RULE_TYPES.TIMED
+            ? "This rule only runs during the selected hours."
+            : "This rule stays active until you edit or delete it."
+        ),
+        createMetaCard(
+          "Coverage",
+          getCoverageLabel(rule.subpageMode),
+          getCoverageCopy(rule)
+        ),
+        createMetaCard("Paths", getPathCountLabel(rule), getPathPreviewCopy(rule))
+      )
+
+      const pathList = document.createElement("div")
+      pathList.className = "rule-paths"
+      const pathEntries = getPathEntries(rule)
+      pathEntries.forEach((entry) => {
+        const chip = document.createElement("span")
+        chip.className = "rule-path"
+        chip.textContent = entry
+        pathList.appendChild(chip)
+      })
 
       const actions = document.createElement("div")
       actions.className = "rule-actions"
@@ -350,16 +412,24 @@ document.addEventListener("DOMContentLoaded", () => {
       editButton.type = "button"
       editButton.className = "secondary-button"
       editButton.textContent = "Edit"
+      editButton.setAttribute("aria-label", `Edit rule for ${rule.site}`)
       editButton.addEventListener("click", () => startEdit(index))
 
       const deleteButton = document.createElement("button")
       deleteButton.type = "button"
       deleteButton.className = "danger-button"
       deleteButton.textContent = "Delete"
+      deleteButton.setAttribute("aria-label", `Delete rule for ${rule.site}`)
       deleteButton.addEventListener("click", () => removeRule(index))
 
       actions.append(editButton, deleteButton)
-      card.append(header, preview, actions)
+      card.append(topline, summaryText, metaGrid)
+
+      if (pathEntries.length > 0) {
+        card.appendChild(pathList)
+      }
+
+      card.appendChild(actions)
       elements.rulesList.appendChild(card)
     })
   }
@@ -386,11 +456,31 @@ document.addEventListener("DOMContentLoaded", () => {
       })
   }
 
-  function createBadge(text, variant) {
-    const badge = document.createElement("span")
-    badge.className = `badge badge-${variant}`
-    badge.textContent = text
-    return badge
+  function createTag(text, variant) {
+    const tag = document.createElement("span")
+    tag.className = `rule-tag rule-tag-${variant}`
+    tag.textContent = text
+    return tag
+  }
+
+  function createMetaCard(label, value, copy) {
+    const card = document.createElement("section")
+    card.className = "rule-meta-card"
+
+    const labelElement = document.createElement("p")
+    labelElement.className = "meta-label"
+    labelElement.textContent = label
+
+    const valueElement = document.createElement("p")
+    valueElement.className = "meta-value"
+    valueElement.textContent = value
+
+    const copyElement = document.createElement("p")
+    copyElement.className = "meta-copy"
+    copyElement.textContent = copy
+
+    card.append(labelElement, valueElement, copyElement)
+    return card
   }
 
   function renderValidation(errors) {
@@ -438,17 +528,162 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (mode === SUBPAGE_MODES.WHITELIST) {
       elements.patternHint.textContent =
-        "Whitelist means the domain is blocked except for the paths below."
+        "The domain is blocked by default. Add the paths that should stay open."
       return
     }
 
     if (mode === SUBPAGE_MODES.BLACKLIST) {
       elements.patternHint.textContent =
-        "Blacklist means the domain stays open except for the paths below."
+        "The domain stays open by default. Add the paths that should be blocked."
       return
     }
 
     elements.patternHint.textContent =
-      "Pattern examples: /comments, /wiki/*, /shorts, /?feed=home"
+      "Examples: /comments, /wiki/*, /shorts, /?feed=home"
+  }
+
+  function renderDraftSummary() {
+    elements.draftSummaryTitle.textContent = buildDraftTitle()
+    elements.draftSummaryCopy.textContent = buildDraftSummaryCopy()
+  }
+
+  function buildDraftTitle() {
+    const site = state.draft.site.trim() || "this site"
+    const hasCompleteSchedule =
+      state.draft.type === RULE_TYPES.TIMED &&
+      state.draft.startTime &&
+      state.draft.endTime
+
+    if (state.draft.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return hasCompleteSchedule
+        ? `Block ${site} from ${state.draft.startTime} to ${state.draft.endTime}, but keep selected paths open.`
+        : `Block ${site}, but keep selected paths open.`
+    }
+
+    if (state.draft.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return hasCompleteSchedule
+        ? `Keep ${site} open from ${state.draft.startTime} to ${state.draft.endTime}, except for selected paths.`
+        : `Keep ${site} open, except for selected paths.`
+    }
+
+    if (hasCompleteSchedule) {
+      return `Block ${site} from ${state.draft.startTime} to ${state.draft.endTime}.`
+    }
+
+    return `Block ${site} all day.`
+  }
+
+  function buildDraftSummaryCopy() {
+    const site = state.draft.site.trim()
+
+    if (!site) {
+      return "Add a domain to generate a plain-language summary before you save the rule."
+    }
+
+    if (
+      state.draft.type === RULE_TYPES.TIMED &&
+      (!state.draft.startTime || !state.draft.endTime)
+    ) {
+      return "Choose both a start and end time so the rule schedule is complete."
+    }
+
+    if (state.draft.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      const count = state.draft.subpageWhitelist.length
+      return count > 0
+        ? `${count} allowed path${count === 1 ? "" : "s"} will stay reachable while the rest of ${site} is blocked.`
+        : `Add at least one allowed path. Without it, the whole domain would still be blocked.`
+    }
+
+    if (state.draft.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      const count = state.draft.subpageBlacklist.length
+      return count > 0
+        ? `${count} blocked path${count === 1 ? "" : "s"} will be denied while the rest of ${site} stays available.`
+        : `Add at least one blocked path. Without it, the domain would stay fully open.`
+    }
+
+    return `Every page on ${site} will be blocked.`
+  }
+
+  function renderDashboardStats() {
+    const alwaysCount = state.rules.filter((rule) => rule.type === RULE_TYPES.ALWAYS).length
+    const timedCount = state.rules.filter((rule) => rule.type === RULE_TYPES.TIMED).length
+
+    elements.totalRulesCount.textContent = String(state.rules.length)
+    elements.alwaysRulesCount.textContent = String(alwaysCount)
+    elements.timedRulesCount.textContent = String(timedCount)
+  }
+
+  function buildRuleNarrative(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return `Blocks ${rule.site} by default and keeps only the listed paths reachable.`
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return `Keeps ${rule.site} open by default and blocks only the listed paths.`
+    }
+
+    return `Blocks the entire domain ${rule.site}.`
+  }
+
+  function getCoverageLabel(mode) {
+    if (mode === SUBPAGE_MODES.WHITELIST) {
+      return "Only allow listed paths"
+    }
+
+    if (mode === SUBPAGE_MODES.BLACKLIST) {
+      return "Only block listed paths"
+    }
+
+    return "Whole domain"
+  }
+
+  function getCoverageCopy(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return "Everything else on the domain stays blocked."
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return "Everything else on the domain stays available."
+    }
+
+    return "Every page on the domain is blocked."
+  }
+
+  function getPathCountLabel(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return `${rule.subpageWhitelist.length} allowed`
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return `${rule.subpageBlacklist.length} blocked`
+    }
+
+    return "No path list"
+  }
+
+  function getPathPreviewCopy(rule) {
+    const entries = getPathEntries(rule)
+
+    if (entries.length === 0) {
+      return "This rule does not depend on specific paths."
+    }
+
+    if (entries.length === 1) {
+      return entries[0]
+    }
+
+    return `${entries[0]} and ${entries.length - 1} more`
+  }
+
+  function getPathEntries(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return rule.subpageWhitelist
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return rule.subpageBlacklist
+    }
+
+    return []
   }
 })

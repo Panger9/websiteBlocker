@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     normalizeRules,
     getActiveBlockingRuleForUrl,
     getRuleTypeLabel,
-    getSubpageModeLabel,
     getNextAllowedDate,
   } = SiteBlockerRules
 
@@ -29,13 +28,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (match.shouldBlock) {
         const nextAllowed = getNextAllowedDate(match.matchingRule)
-        ruleSummaryElement.textContent = `${getRuleTypeLabel(match.matchingRule.type)} rule for ${match.matchingRule.site} with ${getSubpageModeLabel(match.matchingRule.subpageMode).toLowerCase()} mode.`
+        ruleSummaryElement.textContent = buildActiveRuleSummary(match.matchingRule)
         ruleScheduleElement.textContent = nextAllowed
-          ? `Available again after ${nextAllowed.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}.`
-          : "This rule is active until you change it."
+          ? `This page becomes available again ${formatAvailability(nextAllowed)}.`
+          : "This rule stays active until you change or delete it."
       }
     } catch (error) {
       console.error("Failed to enrich blocked page details.", error)
@@ -78,6 +74,40 @@ document.addEventListener("DOMContentLoaded", async () => {
       return "This page was blocked by your current SiteBlocker rule."
     }
 
-    return `${getRuleTypeLabel(type)} rule for ${site} with ${getSubpageModeLabel(mode).toLowerCase()} mode.`
+    return buildActiveRuleSummary({ site, type, subpageMode: mode })
+  }
+
+  function buildActiveRuleSummary(rule) {
+    const typeLabel = getRuleTypeLabel(rule.type)
+
+    if (rule.subpageMode === "whitelist") {
+      return `${typeLabel} rule for ${rule.site}. The site is blocked by default, but listed paths stay open.`
+    }
+
+    if (rule.subpageMode === "blacklist") {
+      return `${typeLabel} rule for ${rule.site}. The site stays open by default, but listed paths are blocked.`
+    }
+
+    return `${typeLabel} rule for ${rule.site}. The whole domain is blocked.`
+  }
+
+  function formatAvailability(nextAllowed) {
+    const now = new Date()
+    const sameDay = now.toDateString() === nextAllowed.toDateString()
+
+    if (sameDay) {
+      return `today at ${nextAllowed.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+    }
+
+    return `on ${nextAllowed.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+    })} at ${nextAllowed.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`
   }
 })
