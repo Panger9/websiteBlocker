@@ -1,239 +1,231 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>SiteBlocker Free Settings</title>
+    <title>SiteBlocker Free</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="../css/options.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="app-header" aria-labelledby="pageTitle">
-        <div class="header-copy">
-          <p class="eyebrow">SiteBlocker Free</p>
-          <h1 id="pageTitle">Build clear rules for calmer browsing.</h1>
-          <p class="header-text">
-            Block a whole site, allow only the paths you need, or remove one
-            distracting corner without decoding a busy dashboard.
-          </p>
-          <div class="header-chips" aria-label="Common rule examples">
-            <span class="header-chip">Block reddit.com all day</span>
-            <span class="header-chip">Allow only /comments</span>
-            <span class="header-chip">Block youtube.com/shorts</span>
+    <div class="page-frame">
+      <header class="topbar">
+        <div class="topbar-spacer"></div>
+
+        <div class="brand-lockup" aria-label="SiteBlocker Free">
+          <div class="brand-mark">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M8 10V7.8C8 5.15 9.9 3.25 12.5 3.25C15.1 3.25 17 5.15 17 7.8V10"
+              />
+              <rect x="6" y="10" width="12" height="10" rx="2.6" />
+            </svg>
+          </div>
+          <div>
+            <p class="brand-title">SiteBlocker Free</p>
+            <p class="brand-subtitle">Work with focus</p>
           </div>
         </div>
 
-        <aside class="header-guide" aria-label="Capabilities">
-          <p class="guide-kicker">What this tool handles</p>
-          <ul class="guide-list">
-            <li>Always-on or scheduled blocking</li>
-            <li>Per-path allow and block rules</li>
-            <li>Fast review, editing and cleanup</li>
-          </ul>
-        </aside>
+        <div class="count-pill">
+          <span id="blockedSitesCount">0</span>
+          <span>sites</span>
+        </div>
       </header>
 
-      <main class="workspace">
-        <section class="panel composer-panel" aria-labelledby="editorTitle">
-          <div class="panel-heading">
-            <div>
-              <p class="panel-kicker">New rule</p>
-              <h2 id="editorTitle">Create a blocking rule</h2>
-            </div>
-            <p id="editorHint" class="panel-copy">
-              Start with the site, then decide whether the whole domain or only
-              certain paths should be blocked.
-            </p>
-          </div>
-
-          <div class="preview-card" aria-live="polite">
-            <p class="editor-state" id="editorStateLabel">Creating a new rule</p>
-            <p class="preview-label">Rule preview</p>
-            <p class="preview-title" id="draftSummaryTitle">
-              Block this site all day
-            </p>
-            <p class="preview-copy" id="draftSummaryCopy">
-              Add a domain to generate a plain-language summary before you save
-              the rule.
-            </p>
-          </div>
-
-          <div class="form-stack">
-            <section class="form-section" aria-labelledby="timingTitle">
-              <div class="section-heading">
-                <h3 id="timingTitle">When should this rule run?</h3>
-                <p class="section-copy">Pick a permanent rule or define daily hours.</p>
-              </div>
-
-              <div class="segmented-control" role="radiogroup" aria-label="Rule type">
-                <label class="segment">
-                  <input type="radio" name="ruleType" value="always" checked />
-                  <span class="segment-title">Always</span>
-                  <span class="segment-copy">Active every day</span>
-                </label>
-                <label class="segment">
-                  <input type="radio" name="ruleType" value="timed" />
-                  <span class="segment-title">Scheduled</span>
-                  <span class="segment-copy">Only during selected hours</span>
-                </label>
-              </div>
-
-              <div class="field-row" id="timeFields" hidden>
-                <div class="field-group">
-                  <label for="startTime">Start time</label>
-                  <input type="time" id="startTime" />
-                </div>
-                <div class="field-group">
-                  <label for="endTime">End time</label>
-                  <input type="time" id="endTime" />
-                </div>
-              </div>
-              <p class="field-error" id="scheduleError" hidden></p>
-            </section>
-
-            <section class="form-section" aria-labelledby="siteTitle">
-              <div class="section-heading">
-                <h3 id="siteTitle">Which site should this rule affect?</h3>
-                <p class="section-copy">Enter only the domain, for example `reddit.com`.</p>
-              </div>
-
-              <div class="field-group">
-                <label for="domainInput">Domain</label>
-                <input
-                  type="text"
-                  id="domainInput"
-                  placeholder="reddit.com"
-                  autocomplete="off"
-                />
-                <p class="field-error" id="siteError" hidden></p>
-              </div>
-            </section>
-
-            <section class="form-section strategy-section" aria-labelledby="strategyTitle">
-              <div class="section-heading">
-                <div>
-                  <p class="panel-kicker">Coverage</p>
-                  <h3 id="strategyTitle">What should happen on that site?</h3>
-                </div>
-                <p id="patternHint" class="section-copy">
-                  Examples: /comments, /wiki/*, /shorts, /?feed=home
-                </p>
-              </div>
-
-              <div class="strategy-options">
-                <label class="strategy-option">
-                  <input type="radio" name="subpageMode" value="none" checked />
-                  <span class="option-title">Block the whole site</span>
-                  <span class="option-copy">Every page on this domain is blocked.</span>
-                </label>
-                <label class="strategy-option">
-                  <input type="radio" name="subpageMode" value="whitelist" />
-                  <span class="option-title">Only allow specific paths</span>
-                  <span class="option-copy">
-                    The domain is blocked except for the paths listed below.
-                  </span>
-                </label>
-                <label class="strategy-option">
-                  <input type="radio" name="subpageMode" value="blacklist" />
-                  <span class="option-title">Only block specific paths</span>
-                  <span class="option-copy">
-                    The domain stays open except for the blocked paths below.
-                  </span>
-                </label>
-              </div>
-
-              <div class="pattern-panel" id="whitelistPanel" hidden>
-                <div class="pattern-panel-heading">
-                  <label for="whitelistInput">Allowed paths</label>
-                  <p class="pattern-panel-copy">Add every path that should stay reachable.</p>
-                </div>
-                <div class="field-inline">
-                  <input
-                    type="text"
-                    id="whitelistInput"
-                    placeholder="/comments or /wiki/*"
-                  />
-                  <button type="button" id="addWhitelistPattern">Add path</button>
-                </div>
-                <ul class="pattern-list" id="whitelistPatterns"></ul>
-              </div>
-
-              <div class="pattern-panel" id="blacklistPanel" hidden>
-                <div class="pattern-panel-heading">
-                  <label for="blacklistInput">Blocked paths</label>
-                  <p class="pattern-panel-copy">Add every path that should be denied.</p>
-                </div>
-                <div class="field-inline">
-                  <input
-                    type="text"
-                    id="blacklistInput"
-                    placeholder="/shorts or /feed/*"
-                  />
-                  <button type="button" id="addBlacklistPattern">Add path</button>
-                </div>
-                <ul class="pattern-list" id="blacklistPatterns"></ul>
-              </div>
-
-              <p class="field-error" id="subpageError" hidden></p>
-            </section>
-          </div>
-
-          <div class="editor-actions">
-            <button type="button" class="primary-button" id="saveRule">
-              Save rule
-            </button>
-            <button type="button" class="secondary-button" id="cancelEdit" hidden>
-              Cancel editing
-            </button>
-          </div>
-          <p class="form-status" id="formStatus" hidden></p>
+      <main class="dashboard">
+        <section class="filters" aria-label="Rule filters">
+          <button type="button" class="filter-pill is-active" data-filter="all">
+            All
+          </button>
+          <button type="button" class="filter-pill" data-filter="always">
+            Permanent
+          </button>
+          <button type="button" class="filter-pill" data-filter="timed">
+            Scheduled
+          </button>
         </section>
 
-        <section class="panel rules-panel" aria-labelledby="rulesTitle">
-          <div class="rules-heading">
-            <div>
-              <p class="panel-kicker">Existing rules</p>
-              <h2 id="rulesTitle">Review your setup</h2>
-            </div>
-            <p class="panel-copy">
-              Each card shows the domain, active schedule, rule type and the
-              paths that matter.
-            </p>
-          </div>
+        <button type="button" class="add-trigger" id="openComposer">
+          <span class="add-trigger-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+          <span>Add new site</span>
+        </button>
 
-          <div class="stats-strip" aria-label="Rule overview">
-            <article class="stat-card">
-              <p class="stat-label">Total</p>
-              <p class="stat-value" id="totalRulesCount">0</p>
-            </article>
-            <article class="stat-card">
-              <p class="stat-label">Always active</p>
-              <p class="stat-value" id="alwaysRulesCount">0</p>
-            </article>
-            <article class="stat-card">
-              <p class="stat-label">Scheduled</p>
-              <p class="stat-value" id="timedRulesCount">0</p>
-            </article>
-          </div>
+        <div class="add-editor-host" id="addEditorHost" hidden></div>
 
-          <div class="empty-state" id="rulesEmptyState">
-            <h3>No rules saved yet</h3>
-            <p>
-              Start with one simple rule. You can block an entire domain, allow
-              only a few paths, or leave a domain open and block just one
-              distracting section.
-            </p>
-            <div class="empty-state-chips" aria-label="Starter examples">
-              <span class="empty-chip">reddit.com all day</span>
-              <span class="empty-chip">youtube.com + block /shorts</span>
-              <span class="empty-chip">youtube.com + allow one course link</span>
-            </div>
-          </div>
-
-          <div class="rules-grid" id="rulesList"></div>
-        </section>
+        <section class="rules-list" id="rulesList" aria-live="polite"></section>
       </main>
+
+      <footer class="footer">
+        <div class="footer-note">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M8 10V7.8C8 5.15 9.9 3.25 12.5 3.25C15.1 3.25 17 5.15 17 7.8V10"
+            />
+            <rect x="6" y="10" width="12" height="10" rx="2.6" />
+          </svg>
+          <span>Data stored locally only</span>
+        </div>
+        <div class="footer-version" id="appVersion">v1.0.1</div>
+      </footer>
     </div>
+
+    <section class="editor-panel" id="sharedEditor" hidden>
+      <div class="editor-header" id="editorHeader">
+        <h2 id="editorTitle">Add new site</h2>
+        <button
+          type="button"
+          class="icon-button"
+          id="closeEditor"
+          aria-label="Close editor"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="editor-stack">
+        <div class="field-group" id="domainField">
+          <label for="domainInput">Website URL</label>
+          <input
+            type="text"
+            id="domainInput"
+            placeholder="e.g. youtube.com"
+            autocomplete="off"
+          />
+          <p class="field-error" id="siteError" hidden></p>
+        </div>
+
+        <div class="editor-grid" id="editorGrid">
+          <section class="config-panel">
+            <div class="panel-title-wrap">
+              <h3>Blocking mode</h3>
+              <p class="panel-copy" id="modeDescription">
+                Choose exactly one mode for this domain.
+              </p>
+            </div>
+
+            <div class="mode-list">
+              <label class="mode-card mode-card-all">
+                <input type="radio" name="blockMode" value="all" checked />
+                <span class="mode-card-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="8" />
+                    <path d="M8 8l8 8" />
+                  </svg>
+                </span>
+                <span class="mode-card-copy">
+                  <span class="mode-card-title">Block all</span>
+                </span>
+              </label>
+
+              <label class="mode-card mode-card-whitelist">
+                <input type="radio" name="blockMode" value="whitelist" />
+                <span class="mode-card-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3.6l6 2.5v5.1c0 4-2.6 7.5-6 9.2c-3.4-1.7-6-5.2-6-9.2V6.1l6-2.5Z" />
+                    <path d="m9.6 12.2l1.6 1.6l3.2-3.6" />
+                  </svg>
+                </span>
+                <span class="mode-card-copy">
+                  <span class="mode-card-title">Whitelist</span>
+                </span>
+              </label>
+
+              <label class="mode-card mode-card-blacklist">
+                <input type="radio" name="blockMode" value="blacklist" />
+                <span class="mode-card-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3.6l6 2.5v5.1c0 4-2.6 7.5-6 9.2c-3.4-1.7-6-5.2-6-9.2V6.1l6-2.5Z" />
+                    <path d="M9 11h6" />
+                  </svg>
+                </span>
+                <span class="mode-card-copy">
+                  <span class="mode-card-title">Blacklist</span>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section class="config-panel schedule-panel">
+            <div class="panel-title-wrap">
+              <h3>Schedule</h3>
+            </div>
+
+            <div class="schedule-switch">
+              <label class="schedule-option">
+                <input type="radio" name="ruleType" value="always" checked />
+                <span>Permanent</span>
+              </label>
+              <label class="schedule-option">
+                <input type="radio" name="ruleType" value="timed" />
+                <span>Scheduled</span>
+              </label>
+            </div>
+
+            <div class="schedule-fields" id="scheduleSection">
+              <div class="schedule-active-content" id="scheduleActiveContent">
+                <div class="time-grid">
+                  <div class="field-group compact-field">
+                    <label for="startTime">From</label>
+                    <input type="time" id="startTime" />
+                  </div>
+                  <div class="field-group compact-field">
+                    <label for="endTime">To</label>
+                    <input type="time" id="endTime" />
+                  </div>
+                </div>
+
+                <div class="field-group compact-field">
+                  <label>Weekdays</label>
+                  <div class="day-grid" id="dayGrid" aria-label="Weekdays">
+                    <button type="button" class="day-chip" data-day="mon">Mon</button>
+                    <button type="button" class="day-chip" data-day="tue">Tue</button>
+                    <button type="button" class="day-chip" data-day="wed">Wed</button>
+                    <button type="button" class="day-chip" data-day="thu">Thu</button>
+                    <button type="button" class="day-chip" data-day="fri">Fri</button>
+                    <button type="button" class="day-chip" data-day="sat">Sat</button>
+                    <button type="button" class="day-chip" data-day="sun">Sun</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="schedule-static-copy" id="scheduleStaticCopy" hidden>
+                always blocked
+              </div>
+            </div>
+
+            <p class="field-error" id="scheduleError" hidden></p>
+          </section>
+        </div>
+
+        <div class="paths-section" id="pathsSection" hidden>
+          <div class="paths-heading">
+            <label for="patternInput" id="pathsLabel">Paths</label>
+            <p class="panel-copy" id="pathsHelper"></p>
+          </div>
+
+          <ul class="pattern-list pattern-list-stacked" id="activePatterns"></ul>
+
+          <div class="field-inline">
+            <input type="text" id="patternInput" placeholder="/path" />
+            <button type="button" class="mini-button" id="addPatternButton">
+              Add
+            </button>
+          </div>
+          <p class="field-error" id="subpageError" hidden></p>
+        </div>
+
+        <button type="button" class="save-button" id="saveRule" disabled>
+          Add site
+        </button>
+        <p class="form-status" id="formStatus" hidden></p>
+      </div>
+    </section>
 
     <script src="../js/rule-engine.js"></script>
     <script src="../js/options.js"></script>

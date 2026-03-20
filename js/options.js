@@ -1,211 +1,445 @@
 document.addEventListener("DOMContentLoaded", () => {
   const {
+    RULES_STORAGE_KEY,
     RULE_TYPES,
     SUBPAGE_MODES,
     normalizeRules,
     normalizeRule,
     validateRuleInput,
     validatePatternInput,
-    getRuleSummary,
-    createRuleKey,
+    formatDaysOfWeek,
   } = SiteBlockerRules
 
+  const BLOCK_MODES = {
+    ALL: "all",
+    WHITELIST: "whitelist",
+    BLACKLIST: "blacklist",
+  }
+
+  const FILTERS = {
+    ALL: "all",
+    ALWAYS: "always",
+    TIMED: "timed",
+  }
+
+  const DEFAULT_TIMES = {
+    start: "09:00",
+    end: "17:00",
+  }
+
+  const DEFAULT_WEEKDAYS = ["mon", "tue", "wed", "thu", "fri"]
+
+  const TEXT = {
+    addTitle: "Add new site",
+    editTitle: "Edit rule",
+    addButton: "Add site",
+    saveButton: "Save changes",
+    loadError: "Saved rules could not be loaded.",
+    formError: "Please review the highlighted fields.",
+    saveError: "The rule could not be saved.",
+    duplicatePath: "This path has already been added.",
+    emptyFilter: "No rules in this filter.",
+    noPaths: "No paths added yet.",
+    removePath: "Remove path",
+    domainFallback: "domain",
+    modeAll: "The entire domain is blocked.",
+    modeWhitelist: "Everything is blocked except the paths listed below.",
+    modeBlacklist: "Everything is allowed except the paths listed below.",
+    allowedPathsLabel: "Allowed paths",
+    blockedPathsLabel: "Blocked paths",
+    allowedPathsHelp:
+      "These paths stay open. Everything else on this site is blocked.",
+    blockedPathsHelp:
+      "These paths are blocked. Everything else on this site stays open.",
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const previewMode = params.get("preview") === "1"
+  const previewState = params.get("state") || ""
+  const storage = createStorageAdapter(previewMode)
+
   const elements = {
-    formTitle: document.getElementById("editorTitle"),
-    formHint: document.getElementById("editorHint"),
-    editorStateLabel: document.getElementById("editorStateLabel"),
-    draftSummaryTitle: document.getElementById("draftSummaryTitle"),
-    draftSummaryCopy: document.getElementById("draftSummaryCopy"),
-    typeRadios: Array.from(document.querySelectorAll('input[name="ruleType"]')),
+    blockedSitesCount: document.getElementById("blockedSitesCount"),
+    filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
+    openComposerButton: document.getElementById("openComposer"),
+    addEditorHost: document.getElementById("addEditorHost"),
+    rulesList: document.getElementById("rulesList"),
+    appVersion: document.getElementById("appVersion"),
+    sharedEditor: document.getElementById("sharedEditor"),
+    editorHeader: document.getElementById("editorHeader"),
+    editorTitle: document.getElementById("editorTitle"),
+    closeEditorButton: document.getElementById("closeEditor"),
+    domainField: document.getElementById("domainField"),
     domainInput: document.getElementById("domainInput"),
+    editorGrid: document.getElementById("editorGrid"),
+    blockModeRadios: Array.from(document.querySelectorAll('input[name="blockMode"]')),
+    modeDescription: document.getElementById("modeDescription"),
+    typeRadios: Array.from(document.querySelectorAll('input[name="ruleType"]')),
+    scheduleSection: document.getElementById("scheduleSection"),
+    scheduleActiveContent: document.getElementById("scheduleActiveContent"),
+    scheduleStaticCopy: document.getElementById("scheduleStaticCopy"),
     startTimeInput: document.getElementById("startTime"),
     endTimeInput: document.getElementById("endTime"),
-    timeFields: document.getElementById("timeFields"),
-    strategyRadios: Array.from(
-      document.querySelectorAll('input[name="subpageMode"]')
-    ),
-    whitelistPanel: document.getElementById("whitelistPanel"),
-    blacklistPanel: document.getElementById("blacklistPanel"),
-    whitelistInput: document.getElementById("whitelistInput"),
-    blacklistInput: document.getElementById("blacklistInput"),
-    whitelistAddButton: document.getElementById("addWhitelistPattern"),
-    blacklistAddButton: document.getElementById("addBlacklistPattern"),
-    whitelistList: document.getElementById("whitelistPatterns"),
-    blacklistList: document.getElementById("blacklistPatterns"),
-    rulesList: document.getElementById("rulesList"),
-    emptyState: document.getElementById("rulesEmptyState"),
+    dayButtons: Array.from(document.querySelectorAll(".day-chip")),
+    pathsSection: document.getElementById("pathsSection"),
+    pathsLabel: document.getElementById("pathsLabel"),
+    pathsHelper: document.getElementById("pathsHelper"),
+    patternList: document.getElementById("activePatterns"),
+    patternInput: document.getElementById("patternInput"),
+    addPatternButton: document.getElementById("addPatternButton"),
     saveButton: document.getElementById("saveRule"),
-    cancelButton: document.getElementById("cancelEdit"),
-    formStatus: document.getElementById("formStatus"),
     siteError: document.getElementById("siteError"),
     scheduleError: document.getElementById("scheduleError"),
     subpageError: document.getElementById("subpageError"),
-    patternHint: document.getElementById("patternHint"),
-    totalRulesCount: document.getElementById("totalRulesCount"),
-    alwaysRulesCount: document.getElementById("alwaysRulesCount"),
-    timedRulesCount: document.getElementById("timedRulesCount"),
+    formStatus: document.getElementById("formStatus"),
   }
 
   const state = {
     rules: [],
-    editorMode: "create",
+    filter: FILTERS.ALL,
+    editorPlacement: "closed",
     editingIndex: -1,
+    editingHost: null,
     draft: createEmptyDraft(),
   }
 
-  bindEvents()
-  loadRules()
+  init()
+
+  async function init() {
+    applyVersion()
+    bindEvents()
+    await loadRules()
+    applyPreviewState()
+    render()
+  }
+
+  function applyVersion() {
+    if (previewMode) {
+      elements.appVersion.textContent = "v1.0.0"
+      return
+    }
+
+    try {
+      if (typeof chrome !== "undefined" && chrome.runtime?.getManifest) {
+        elements.appVersion.textContent = `v${chrome.runtime.getManifest().version}`
+        return
+      }
+    } catch (error) {
+      // Ignore preview fallback.
+    }
+
+    elements.appVersion.textContent = "v1.0.1"
+  }
+
+  function createStorageAdapter(isPreview) {
+    let memoryRules = createPreviewRules()
+
+    if (!isPreview && typeof chrome !== "undefined" && chrome.storage?.local) {
+      return {
+        async getRules() {
+          const result = await chrome.storage.local.get([RULES_STORAGE_KEY])
+          return normalizeRules(result[RULES_STORAGE_KEY] || [])
+        },
+        async saveRules(rules) {
+          const normalized = normalizeRules(rules)
+          await chrome.storage.local.set({ [RULES_STORAGE_KEY]: normalized })
+
+          chrome.runtime?.sendMessage?.({ type: "rulesUpdated" }, () => {
+            if (chrome.runtime?.lastError) {
+              console.warn(
+                "Rule refresh message failed.",
+                chrome.runtime.lastError.message
+              )
+            }
+          })
+        },
+      }
+    }
+
+    return {
+      async getRules() {
+        return normalizeRules(memoryRules)
+      },
+      async saveRules(rules) {
+        memoryRules = normalizeRules(rules)
+      },
+    }
+  }
+
+  function createPreviewRules() {
+    return [
+      {
+        type: RULE_TYPES.TIMED,
+        site: "youtube.com",
+        startTime: DEFAULT_TIMES.start,
+        endTime: DEFAULT_TIMES.end,
+        daysOfWeek: [...DEFAULT_WEEKDAYS],
+        subpageMode: SUBPAGE_MODES.BLACKLIST,
+        subpageBlacklist: ["/shorts", "/feed"],
+      },
+      {
+        type: RULE_TYPES.ALWAYS,
+        site: "twitter.com",
+        subpageMode: SUBPAGE_MODES.NONE,
+      },
+      {
+        type: RULE_TYPES.ALWAYS,
+        site: "reddit.com",
+        subpageMode: SUBPAGE_MODES.WHITELIST,
+        subpageWhitelist: ["/comments", "/r/programming"],
+      },
+    ]
+  }
 
   function createEmptyDraft() {
     return {
-      type: RULE_TYPES.ALWAYS,
       site: "",
-      startTime: "",
-      endTime: "",
-      subpageMode: SUBPAGE_MODES.NONE,
-      subpageWhitelist: [],
-      subpageBlacklist: [],
+      type: RULE_TYPES.ALWAYS,
+      blockMode: BLOCK_MODES.ALL,
+      startTime: DEFAULT_TIMES.start,
+      endTime: DEFAULT_TIMES.end,
+      daysOfWeek: [...DEFAULT_WEEKDAYS],
+      whitelistPatterns: [],
+      blacklistPatterns: [],
+    }
+  }
+
+  function applyPreviewState() {
+    if (previewState === "add") {
+      openAddEditor()
+      state.draft.type = RULE_TYPES.TIMED
+      state.draft.blockMode = BLOCK_MODES.BLACKLIST
+      state.draft.endTime = "14:00"
+      return
+    }
+
+    if (previewState === "edit-blacklist") {
+      const index = state.rules.findIndex((rule) => rule.site === "youtube.com")
+      if (index >= 0) {
+        openEditEditor(index)
+      }
     }
   }
 
   function bindEvents() {
-    elements.typeRadios.forEach((radio) => {
-      radio.addEventListener("change", () => {
-        state.draft.type = radio.value
-        clearFieldError(elements.scheduleError)
-        clearStatus()
-        renderEditor()
+    elements.filterButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        state.filter = button.dataset.filter || FILTERS.ALL
+        render()
       })
     })
 
-    elements.strategyRadios.forEach((radio) => {
-      radio.addEventListener("change", () => {
-        state.draft.subpageMode = radio.value
-        clearFieldError(elements.subpageError)
-        clearStatus()
-        renderEditor()
-      })
+    elements.openComposerButton.addEventListener("click", () => {
+      openAddEditor()
+      render()
+    })
+
+    elements.closeEditorButton.addEventListener("click", () => {
+      closeEditor()
+      render()
     })
 
     elements.domainInput.addEventListener("input", () => {
       state.draft.site = elements.domainInput.value
       clearFieldError(elements.siteError)
       clearStatus()
-      renderDraftSummary()
+      renderEditorState()
+    })
+
+    elements.blockModeRadios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        state.draft.blockMode = radio.value
+        clearFieldError(elements.subpageError)
+        clearStatus()
+        renderEditorState()
+      })
+    })
+
+    elements.typeRadios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        state.draft.type = radio.value
+        clearFieldError(elements.scheduleError)
+        clearStatus()
+        renderEditorState()
+      })
     })
 
     elements.startTimeInput.addEventListener("input", () => {
       state.draft.startTime = elements.startTimeInput.value
       clearFieldError(elements.scheduleError)
       clearStatus()
-      renderDraftSummary()
+      renderEditorState()
     })
 
     elements.endTimeInput.addEventListener("input", () => {
       state.draft.endTime = elements.endTimeInput.value
       clearFieldError(elements.scheduleError)
       clearStatus()
-      renderDraftSummary()
+      renderEditorState()
     })
 
-    elements.whitelistAddButton.addEventListener("click", () => {
-      addPattern("whitelist")
+    elements.dayButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        toggleDay(button.dataset.day || "")
+      })
     })
 
-    elements.blacklistAddButton.addEventListener("click", () => {
-      addPattern("blacklist")
-    })
-
-    elements.whitelistInput.addEventListener("keydown", (event) => {
+    elements.addPatternButton.addEventListener("click", addActivePattern)
+    elements.patternInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault()
-        addPattern("whitelist")
+        addActivePattern()
       }
     })
 
-    elements.blacklistInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault()
-        addPattern("blacklist")
+    elements.patternList.addEventListener("click", (event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) {
+        return
+      }
+
+      const removeButton = target.closest("[data-remove-pattern]")
+      if (!removeButton) {
+        return
+      }
+
+      const pattern = removeButton.getAttribute("data-remove-pattern")
+      if (pattern) {
+        removePattern(pattern)
       }
     })
 
-    elements.saveButton.addEventListener("click", handleSubmit)
-    elements.cancelButton.addEventListener("click", resetEditor)
+    elements.saveButton.addEventListener("click", async () => {
+      await handleSubmit()
+    })
   }
 
   async function loadRules() {
     try {
-      const result = await chrome.storage.local.get(["blockedRules"])
-      state.rules = normalizeRules(result.blockedRules || [])
+      state.rules = normalizeRules(await storage.getRules())
     } catch (error) {
       console.error("Failed to load rules.", error)
       state.rules = []
-      showStatus("Could not load saved rules.", "error")
+      showStatus(TEXT.loadError, "error")
     }
-
-    resetEditor()
-    renderRules()
   }
 
   async function persistRules() {
     state.rules = normalizeRules(state.rules)
-    await chrome.storage.local.set({ blockedRules: state.rules })
+    await storage.saveRules(state.rules)
+  }
 
-    chrome.runtime.sendMessage({ type: "rulesUpdated" }, () => {
-      if (chrome.runtime.lastError) {
-        console.warn("Rule refresh message failed.", chrome.runtime.lastError.message)
-      }
+  function openAddEditor() {
+    state.editorPlacement = "add"
+    state.editingIndex = -1
+    state.editingHost = null
+    state.draft = createEmptyDraft()
+    clearValidation()
+    clearStatus()
+  }
+
+  function openEditEditor(index) {
+    state.editorPlacement = "edit"
+    state.editingIndex = index
+    state.editingHost = null
+    state.draft = ruleToDraft(state.rules[index])
+    clearValidation()
+    clearStatus()
+  }
+
+  function closeEditor() {
+    state.editorPlacement = "closed"
+    state.editingIndex = -1
+    state.editingHost = null
+    state.draft = createEmptyDraft()
+    clearValidation()
+    clearStatus()
+    elements.sharedEditor.hidden = true
+  }
+
+  function ruleToDraft(rule) {
+    const normalized = normalizeRule(rule)
+    return {
+      site: normalized.site,
+      type: normalized.type,
+      blockMode:
+        normalized.subpageMode === SUBPAGE_MODES.WHITELIST
+          ? BLOCK_MODES.WHITELIST
+          : normalized.subpageMode === SUBPAGE_MODES.BLACKLIST
+            ? BLOCK_MODES.BLACKLIST
+            : BLOCK_MODES.ALL,
+      startTime: normalized.startTime || DEFAULT_TIMES.start,
+      endTime: normalized.endTime || DEFAULT_TIMES.end,
+      daysOfWeek: [...normalized.daysOfWeek],
+      whitelistPatterns: [...normalized.subpageWhitelist],
+      blacklistPatterns: [...normalized.subpageBlacklist],
+    }
+  }
+
+  function draftToRule() {
+    return normalizeRule({
+      type: state.draft.type,
+      site: state.draft.site,
+      startTime: state.draft.type === RULE_TYPES.TIMED ? state.draft.startTime : "",
+      endTime: state.draft.type === RULE_TYPES.TIMED ? state.draft.endTime : "",
+      daysOfWeek: state.draft.type === RULE_TYPES.TIMED ? state.draft.daysOfWeek : [],
+      subpageMode: getDraftSubpageMode(),
+      subpageWhitelist:
+        state.draft.blockMode === BLOCK_MODES.WHITELIST
+          ? state.draft.whitelistPatterns
+          : [],
+      subpageBlacklist:
+        state.draft.blockMode === BLOCK_MODES.BLACKLIST
+          ? state.draft.blacklistPatterns
+          : [],
     })
   }
 
-  function handleSubmit() {
+  function getDraftSubpageMode() {
+    if (state.draft.blockMode === BLOCK_MODES.WHITELIST) {
+      return SUBPAGE_MODES.WHITELIST
+    }
+
+    if (state.draft.blockMode === BLOCK_MODES.BLACKLIST) {
+      return SUBPAGE_MODES.BLACKLIST
+    }
+
+    return SUBPAGE_MODES.NONE
+  }
+
+  async function handleSubmit() {
     clearValidation()
-
-    const candidate = normalizeRule({
-      ...state.draft,
-      site: elements.domainInput.value,
-      startTime: elements.startTimeInput.value,
-      endTime: elements.endTimeInput.value,
-    })
-
-    const result = validateRuleInput(
+    const candidate = draftToRule()
+    const validation = validateRuleInput(
       candidate,
       state.rules,
-      state.editorMode === "edit" ? state.editingIndex : -1
+      state.editorPlacement === "edit" ? state.editingIndex : -1
     )
 
-    if (!result.valid) {
-      renderValidation(result.errors)
-      showStatus("Fix the highlighted fields before saving this rule.", "error")
+    if (!validation.valid) {
+      renderValidation(validation.errors)
+      showStatus(TEXT.formError, "error")
       return
     }
 
-    if (state.editorMode === "edit") {
-      state.rules[state.editingIndex] = result.normalizedRule
-      showStatus("Rule updated.", "success")
+    if (state.editorPlacement === "edit") {
+      state.rules[state.editingIndex] = validation.normalizedRule
     } else {
-      state.rules.unshift(result.normalizedRule)
-      showStatus("Rule saved.", "success")
+      state.rules.unshift(validation.normalizedRule)
     }
 
-    persistRules()
-      .then(() => {
-        resetEditor(false)
-        renderRules()
-      })
-      .catch((error) => {
-        console.error("Failed to save rules.", error)
-        showStatus("Could not save the rule. Try again.", "error")
-      })
+    try {
+      await persistRules()
+      closeEditor()
+      render()
+    } catch (error) {
+      console.error("Failed to save rules.", error)
+      showStatus(TEXT.saveError, "error")
+    }
   }
 
-  function addPattern(mode) {
-    const isWhitelist = mode === "whitelist"
-    const input = isWhitelist ? elements.whitelistInput : elements.blacklistInput
-    const targetKey = isWhitelist ? "subpageWhitelist" : "subpageBlacklist"
-    const validation = validatePatternInput(input.value)
-
+  function addActivePattern() {
+    const validation = validatePatternInput(elements.patternInput.value)
     clearFieldError(elements.subpageError)
     clearStatus()
 
@@ -214,273 +448,471 @@ document.addEventListener("DOMContentLoaded", () => {
       return
     }
 
-    if (state.draft[targetKey].includes(validation.normalized)) {
-      setFieldError(elements.subpageError, "That path is already listed.")
+    const targetList = getEditablePatternList()
+    if (!targetList) {
       return
     }
 
-    state.draft[targetKey] = [...state.draft[targetKey], validation.normalized]
-    input.value = ""
-    renderPatternLists()
-    updatePatternHint()
-    renderDraftSummary()
+    if (targetList.includes(validation.normalized)) {
+      setFieldError(elements.subpageError, TEXT.duplicatePath)
+      return
+    }
+
+    targetList.push(validation.normalized)
+    elements.patternInput.value = ""
+    renderEditorState()
   }
 
-  function removePattern(mode, pattern) {
-    const key = mode === "whitelist" ? "subpageWhitelist" : "subpageBlacklist"
-    state.draft[key] = state.draft[key].filter((entry) => entry !== pattern)
-    renderPatternLists()
-    updatePatternHint()
-    renderDraftSummary()
+  function getEditablePatternList() {
+    if (state.draft.blockMode === BLOCK_MODES.WHITELIST) {
+      return state.draft.whitelistPatterns
+    }
+
+    if (state.draft.blockMode === BLOCK_MODES.BLACKLIST) {
+      return state.draft.blacklistPatterns
+    }
+
+    return null
   }
 
-  function startEdit(index) {
-    state.editorMode = "edit"
-    state.editingIndex = index
-    state.draft = normalizeRule(state.rules[index])
-    clearValidation()
-    clearStatus()
-    renderEditor()
-    window.scrollTo({ top: 0, behavior: "smooth" })
+  function removePattern(pattern) {
+    if (state.draft.blockMode === BLOCK_MODES.WHITELIST) {
+      state.draft.whitelistPatterns = state.draft.whitelistPatterns.filter(
+        (entry) => entry !== pattern
+      )
+    }
+
+    if (state.draft.blockMode === BLOCK_MODES.BLACKLIST) {
+      state.draft.blacklistPatterns = state.draft.blacklistPatterns.filter(
+        (entry) => entry !== pattern
+      )
+    }
+
+    renderEditorState()
   }
 
-  function resetEditor(clearMessage = true) {
-    state.editorMode = "create"
-    state.editingIndex = -1
-    state.draft = createEmptyDraft()
-    clearValidation()
-    renderEditor()
+  function toggleDay(dayKey) {
+    const days = new Set(state.draft.daysOfWeek)
+    if (days.has(dayKey)) {
+      days.delete(dayKey)
+    } else {
+      days.add(dayKey)
+    }
 
-    if (clearMessage) {
-      clearStatus()
+    state.draft.daysOfWeek = Array.from(days)
+    renderEditorState()
+  }
+
+  function render() {
+    renderFilters()
+    renderAddEditorHost()
+    renderRules()
+    renderEditorState()
+    elements.blockedSitesCount.textContent = String(state.rules.length)
+  }
+
+  function renderFilters() {
+    elements.filterButtons.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.filter === state.filter)
+    })
+  }
+
+  function renderAddEditorHost() {
+    elements.openComposerButton.hidden = state.editorPlacement === "add"
+    elements.addEditorHost.hidden = state.editorPlacement !== "add"
+  }
+
+  function renderRules() {
+    elements.rulesList.innerHTML = ""
+    state.editingHost = null
+
+    const visibleRules = state.rules.filter((rule) => ruleMatchesFilter(rule, state.filter))
+
+    if (visibleRules.length === 0) {
+      const empty = document.createElement("section")
+      empty.className = "empty-state"
+      const paragraph = document.createElement("p")
+      paragraph.textContent = TEXT.emptyFilter
+      empty.appendChild(paragraph)
+      elements.rulesList.appendChild(empty)
+      return
+    }
+
+    visibleRules.forEach((rule) => {
+      const ruleIndex = state.rules.indexOf(rule)
+      elements.rulesList.appendChild(createRuleCard(rule, ruleIndex))
+    })
+  }
+
+  function ruleMatchesFilter(rule, filter) {
+    if (filter === FILTERS.ALWAYS) {
+      return rule.type === RULE_TYPES.ALWAYS
+    }
+
+    if (filter === FILTERS.TIMED) {
+      return rule.type === RULE_TYPES.TIMED
+    }
+
+    return true
+  }
+
+  function createRuleCard(rule, ruleIndex) {
+    const card = document.createElement("article")
+    card.className = "rule-card"
+
+    if (isEditingRule(ruleIndex)) {
+      card.classList.add("is-expanded")
+    }
+
+    const header = document.createElement("div")
+    header.className = "rule-header"
+
+    const main = document.createElement("div")
+    main.className = "rule-main"
+
+    const icon = document.createElement("div")
+    icon.className = `rule-icon rule-icon-${getBlockModeVariant(rule)}`
+    icon.innerHTML = getRuleIconMarkup(rule)
+
+    const copy = document.createElement("div")
+    copy.className = "rule-copy"
+
+    const topline = document.createElement("div")
+    topline.className = "rule-topline"
+
+    const domain = document.createElement("p")
+    domain.className = "rule-domain"
+    domain.textContent = rule.site
+
+    const badge = document.createElement("span")
+    badge.className = `rule-badge rule-badge-${getBlockModeVariant(rule)}`
+    badge.textContent = getBlockModeLabel(rule)
+
+    topline.append(domain, badge)
+
+    if (rule.type === RULE_TYPES.TIMED) {
+      const timeChip = document.createElement("span")
+      timeChip.className = "rule-time-chip"
+      timeChip.textContent = `${rule.startTime}-${rule.endTime}`
+      topline.appendChild(timeChip)
+    }
+
+    copy.appendChild(topline)
+
+    if (rule.type === RULE_TYPES.TIMED) {
+      copy.appendChild(createRuleLine(formatDaysOfWeek(rule.daysOfWeek)))
+    }
+
+    const detailText = getRuleDetailText(rule)
+    if (detailText) {
+      copy.appendChild(createRuleLine(detailText))
+    }
+
+    main.append(icon, copy)
+
+    const actions = document.createElement("div")
+    actions.className = "rule-actions"
+
+    const editButton = createRuleActionButton(
+      renderSettingsIcon(),
+      `Open rule for ${rule.site}`,
+      async () => {
+        if (isEditingRule(ruleIndex)) {
+          closeEditor()
+        } else {
+          openEditEditor(ruleIndex)
+        }
+        render()
+      }
+    )
+
+    if (isEditingRule(ruleIndex)) {
+      editButton.classList.add("is-active")
+    }
+
+    const deleteButton = createRuleActionButton(
+      renderTrashIcon(),
+      `Delete rule for ${rule.site}`,
+      async () => {
+        await removeRule(ruleIndex)
+      }
+    )
+
+    actions.append(editButton, deleteButton)
+    header.append(main, actions)
+    card.appendChild(header)
+
+    if (isEditingRule(ruleIndex)) {
+      const host = document.createElement("div")
+      state.editingHost = host
+      card.appendChild(host)
+    }
+
+    return card
+  }
+
+  function createRuleLine(text) {
+    const line = document.createElement("p")
+    line.className = "rule-line"
+    line.textContent = text
+    return line
+  }
+
+  function getRuleDetailText(rule) {
+    const subpageCount = getPatternCount(rule)
+    if (subpageCount === 0) {
+      return ""
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return `${subpageCount} allowed path${subpageCount === 1 ? "" : "s"}`
+    }
+
+    return `${subpageCount} blocked path${subpageCount === 1 ? "" : "s"}`
+  }
+
+  function createRuleActionButton(iconMarkup, ariaLabel, onClick) {
+    const button = document.createElement("button")
+    button.type = "button"
+    button.className = "rule-action"
+    button.innerHTML = iconMarkup
+    button.setAttribute("aria-label", ariaLabel)
+    button.addEventListener("click", onClick)
+    return button
+  }
+
+  async function removeRule(index) {
+    state.rules = state.rules.filter((_, ruleIndex) => ruleIndex !== index)
+    if (isEditingRule(index)) {
+      closeEditor()
+    }
+
+    try {
+      await persistRules()
+      render()
+    } catch (error) {
+      console.error("Failed to remove rule.", error)
     }
   }
 
-  function renderEditor() {
-    const isScheduled = state.draft.type === RULE_TYPES.TIMED
-    const isEditing = state.editorMode === "edit"
+  function isEditingRule(ruleIndex) {
+    return state.editorPlacement === "edit" && state.editingIndex === ruleIndex
+  }
 
-    elements.editorStateLabel.textContent = isEditing
-      ? "Editing existing rule"
-      : "Creating a new rule"
-    elements.formTitle.textContent = isEditing
-      ? "Edit blocking rule"
-      : "Create a blocking rule"
-    elements.formHint.textContent = isEditing
-      ? "Adjust the domain, schedule or path rules, then save the updated version."
-      : "Create a simple domain rule or make it precise with allowed or blocked paths."
+  function renderEditorState() {
+    if (state.editorPlacement === "closed") {
+      elements.sharedEditor.hidden = true
+      return
+    }
+
+    const targetHost =
+      state.editorPlacement === "add" ? elements.addEditorHost : state.editingHost
+
+    if (!targetHost) {
+      return
+    }
+
+    targetHost.appendChild(elements.sharedEditor)
+    elements.sharedEditor.hidden = false
+    elements.sharedEditor.classList.toggle("is-inline", state.editorPlacement === "edit")
+    elements.editorHeader.hidden = state.editorPlacement === "edit"
+    elements.domainField.hidden = state.editorPlacement === "edit"
+
+    elements.editorTitle.textContent =
+      state.editorPlacement === "add" ? TEXT.addTitle : TEXT.editTitle
+    elements.saveButton.textContent =
+      state.editorPlacement === "add" ? TEXT.addButton : TEXT.saveButton
+
+    elements.domainInput.value = state.draft.site
+    elements.startTimeInput.value = state.draft.startTime
+    elements.endTimeInput.value = state.draft.endTime
+    elements.scheduleSection.classList.toggle(
+      "is-static",
+      state.draft.type !== RULE_TYPES.TIMED
+    )
+    elements.scheduleActiveContent.hidden = state.draft.type !== RULE_TYPES.TIMED
+    elements.scheduleStaticCopy.hidden = state.draft.type === RULE_TYPES.TIMED
+    elements.editorGrid.classList.toggle(
+      "is-balanced",
+      state.draft.type === RULE_TYPES.TIMED
+    )
+
+    elements.blockModeRadios.forEach((radio) => {
+      radio.checked = radio.value === state.draft.blockMode
+    })
 
     elements.typeRadios.forEach((radio) => {
       radio.checked = radio.value === state.draft.type
     })
 
-    elements.strategyRadios.forEach((radio) => {
-      radio.checked = radio.value === state.draft.subpageMode
+    elements.dayButtons.forEach((button) => {
+      button.classList.toggle(
+        "is-active",
+        state.draft.daysOfWeek.includes(button.dataset.day || "")
+      )
     })
 
-    elements.domainInput.value = state.draft.site
-    elements.startTimeInput.value = state.draft.startTime
-    elements.endTimeInput.value = state.draft.endTime
-    elements.timeFields.hidden = !isScheduled
-    elements.whitelistPanel.hidden = state.draft.subpageMode !== SUBPAGE_MODES.WHITELIST
-    elements.blacklistPanel.hidden = state.draft.subpageMode !== SUBPAGE_MODES.BLACKLIST
-    elements.saveButton.textContent = isEditing ? "Save changes" : "Save rule"
-    elements.cancelButton.hidden = !isEditing
-
-    renderPatternLists()
-    updatePatternHint()
-    renderDraftSummary()
+    syncModeDescriptions()
+    renderPatternSection()
+    updateSaveButtonState()
   }
 
-  function renderPatternLists() {
-    renderPatternList(
-      elements.whitelistList,
-      state.draft.subpageWhitelist,
-      "whitelist"
-    )
-    renderPatternList(
-      elements.blacklistList,
-      state.draft.subpageBlacklist,
-      "blacklist"
-    )
+  function syncModeDescriptions() {
+    if (state.draft.blockMode === BLOCK_MODES.ALL) {
+      elements.modeDescription.textContent = TEXT.modeAll
+      return
+    }
+
+    if (state.draft.blockMode === BLOCK_MODES.WHITELIST) {
+      elements.modeDescription.textContent = TEXT.modeWhitelist
+      return
+    }
+
+    elements.modeDescription.textContent = TEXT.modeBlacklist
   }
 
-  function renderPatternList(container, patterns, mode) {
-    container.innerHTML = ""
+  function renderPatternSection() {
+    const showPaths = state.draft.blockMode !== BLOCK_MODES.ALL
+    const isWhitelist = state.draft.blockMode === BLOCK_MODES.WHITELIST
+    const patterns = getActivePatterns()
+
+    elements.pathsSection.hidden = !showPaths
+    if (!showPaths) {
+      return
+    }
+
+    elements.pathsLabel.textContent = isWhitelist
+      ? TEXT.allowedPathsLabel
+      : TEXT.blockedPathsLabel
+    elements.pathsHelper.textContent = isWhitelist
+      ? TEXT.allowedPathsHelp
+      : TEXT.blockedPathsHelp
+    elements.patternInput.placeholder = isWhitelist ? "/allowed-path" : "/path"
+
+    elements.patternList.innerHTML = ""
 
     if (patterns.length === 0) {
       const empty = document.createElement("li")
       empty.className = "pattern-empty"
-      empty.textContent =
-        mode === "whitelist"
-          ? "No allowed paths added yet."
-          : "No blocked paths added yet."
-      container.appendChild(empty)
+      empty.textContent = TEXT.noPaths
+      elements.patternList.appendChild(empty)
       return
     }
 
     patterns.forEach((pattern) => {
-      const item = document.createElement("li")
-      item.className = "pattern-chip"
-
-      const label = document.createElement("span")
-      label.textContent = pattern
-
-      const remove = document.createElement("button")
-      remove.type = "button"
-      remove.className = "chip-remove"
-      remove.textContent = "Remove"
-      remove.addEventListener("click", () => removePattern(mode, pattern))
-
-      item.append(label, remove)
-      container.appendChild(item)
+      elements.patternList.appendChild(createPatternRow(pattern))
     })
   }
 
-  function renderRules() {
-    elements.rulesList.innerHTML = ""
-    elements.emptyState.hidden = state.rules.length > 0
-    renderDashboardStats()
-
-    state.rules.forEach((rule, index) => {
-      const summary = getRuleSummary(rule)
-      const card = document.createElement("article")
-      card.className = "rule-card"
-
-      const topline = document.createElement("div")
-      topline.className = "rule-topline"
-
-      const titleWrap = document.createElement("div")
-      titleWrap.className = "rule-title-wrap"
-
-      const domain = document.createElement("h3")
-      domain.className = "rule-title"
-      domain.textContent = rule.site
-
-      const schedule = document.createElement("p")
-      schedule.className = "rule-schedule"
-      schedule.textContent = summary.scheduleLabel
-
-      titleWrap.append(domain, schedule)
-
-      const tags = document.createElement("div")
-      tags.className = "rule-tags"
-      tags.append(
-        createTag(summary.typeLabel, "type"),
-        createTag(summary.modeLabel, "mode"),
-        createTag(summary.details, "detail")
-      )
-
-      topline.append(titleWrap, tags)
-
-      const summaryText = document.createElement("p")
-      summaryText.className = "rule-summary"
-      summaryText.textContent = buildRuleNarrative(rule)
-
-      const metaGrid = document.createElement("div")
-      metaGrid.className = "rule-meta-grid"
-      metaGrid.append(
-        createMetaCard(
-          "Active",
-          summary.scheduleLabel,
-          rule.type === RULE_TYPES.TIMED
-            ? "This rule only runs during the selected hours."
-            : "This rule stays active until you edit or delete it."
-        ),
-        createMetaCard(
-          "Coverage",
-          getCoverageLabel(rule.subpageMode),
-          getCoverageCopy(rule)
-        ),
-        createMetaCard("Paths", getPathCountLabel(rule), getPathPreviewCopy(rule))
-      )
-
-      const pathList = document.createElement("div")
-      pathList.className = "rule-paths"
-      const pathEntries = getPathEntries(rule)
-      pathEntries.forEach((entry) => {
-        const chip = document.createElement("span")
-        chip.className = "rule-path"
-        chip.textContent = entry
-        pathList.appendChild(chip)
-      })
-
-      const actions = document.createElement("div")
-      actions.className = "rule-actions"
-
-      const editButton = document.createElement("button")
-      editButton.type = "button"
-      editButton.className = "secondary-button"
-      editButton.textContent = "Edit"
-      editButton.setAttribute("aria-label", `Edit rule for ${rule.site}`)
-      editButton.addEventListener("click", () => startEdit(index))
-
-      const deleteButton = document.createElement("button")
-      deleteButton.type = "button"
-      deleteButton.className = "danger-button"
-      deleteButton.textContent = "Delete"
-      deleteButton.setAttribute("aria-label", `Delete rule for ${rule.site}`)
-      deleteButton.addEventListener("click", () => removeRule(index))
-
-      actions.append(editButton, deleteButton)
-      card.append(topline, summaryText, metaGrid)
-
-      if (pathEntries.length > 0) {
-        card.appendChild(pathList)
-      }
-
-      card.appendChild(actions)
-      elements.rulesList.appendChild(card)
-    })
-  }
-
-  function removeRule(index) {
-    const removedRule = state.rules[index]
-    state.rules = state.rules.filter((_, ruleIndex) => ruleIndex !== index)
-
-    if (
-      state.editorMode === "edit" &&
-      createRuleKey(removedRule) === createRuleKey(state.draft)
-    ) {
-      resetEditor(false)
+  function getActivePatterns() {
+    if (state.draft.blockMode === BLOCK_MODES.WHITELIST) {
+      return state.draft.whitelistPatterns
     }
 
-    persistRules()
-      .then(() => {
-        renderRules()
-        showStatus("Rule deleted.", "success")
-      })
-      .catch((error) => {
-        console.error("Failed to remove rule.", error)
-        showStatus("Could not delete the rule. Try again.", "error")
-      })
+    if (state.draft.blockMode === BLOCK_MODES.BLACKLIST) {
+      return state.draft.blacklistPatterns
+    }
+
+    return []
   }
 
-  function createTag(text, variant) {
-    const tag = document.createElement("span")
-    tag.className = `rule-tag rule-tag-${variant}`
-    tag.textContent = text
-    return tag
+  function createPatternRow(pattern) {
+    const item = document.createElement("li")
+    item.className = "pattern-row"
+
+    const copy = document.createElement("span")
+    copy.className = "pattern-row-copy"
+
+    const domain = document.createElement("span")
+    domain.className = "pattern-domain"
+    domain.textContent = state.draft.site || TEXT.domainFallback
+
+    const path = document.createElement("span")
+    path.className = "pattern-path"
+    path.textContent = pattern
+
+    const removeButton = document.createElement("button")
+    removeButton.type = "button"
+    removeButton.className = "pattern-remove"
+    removeButton.dataset.removePattern = pattern
+    removeButton.setAttribute("aria-label", TEXT.removePath)
+    removeButton.textContent = "x"
+
+    copy.append(domain, path)
+    item.append(copy, removeButton)
+    return item
   }
 
-  function createMetaCard(label, value, copy) {
-    const card = document.createElement("section")
-    card.className = "rule-meta-card"
+  function updateSaveButtonState() {
+    const validation = validateRuleInput(
+      draftToRule(),
+      state.rules,
+      state.editorPlacement === "edit" ? state.editingIndex : -1
+    )
+    elements.saveButton.disabled = !validation.valid
+  }
 
-    const labelElement = document.createElement("p")
-    labelElement.className = "meta-label"
-    labelElement.textContent = label
+  function getBlockModeVariant(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return "whitelist"
+    }
 
-    const valueElement = document.createElement("p")
-    valueElement.className = "meta-value"
-    valueElement.textContent = value
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return "blacklist"
+    }
 
-    const copyElement = document.createElement("p")
-    copyElement.className = "meta-copy"
-    copyElement.textContent = copy
+    return "all"
+  }
 
-    card.append(labelElement, valueElement, copyElement)
-    return card
+  function getBlockModeLabel(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return "Whitelist"
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return "Blacklist"
+    }
+
+    return "All"
+  }
+
+  function getRuleIconMarkup(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3.6l6 2.5v5.1c0 4-2.6 7.5-6 9.2c-3.4-1.7-6-5.2-6-9.2V6.1l6-2.5Z"></path>
+          <path d="m9.6 12.2l1.6 1.6l3.2-3.6"></path>
+        </svg>
+      `
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3.6l6 2.5v5.1c0 4-2.6 7.5-6 9.2c-3.4-1.7-6-5.2-6-9.2V6.1l6-2.5Z"></path>
+          <path d="M9 11h6"></path>
+        </svg>
+      `
+    }
+
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8"></circle>
+        <path d="M8 8l8 8"></path>
+      </svg>
+    `
+  }
+
+  function getPatternCount(rule) {
+    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
+      return rule.subpageWhitelist.length
+    }
+
+    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
+      return rule.subpageBlacklist.length
+    }
+
+    return 0
   }
 
   function renderValidation(errors) {
@@ -523,167 +955,24 @@ document.addEventListener("DOMContentLoaded", () => {
     delete elements.formStatus.dataset.tone
   }
 
-  function updatePatternHint() {
-    const mode = state.draft.subpageMode
-
-    if (mode === SUBPAGE_MODES.WHITELIST) {
-      elements.patternHint.textContent =
-        "The domain is blocked by default. Add the paths that should stay open."
-      return
-    }
-
-    if (mode === SUBPAGE_MODES.BLACKLIST) {
-      elements.patternHint.textContent =
-        "The domain stays open by default. Add the paths that should be blocked."
-      return
-    }
-
-    elements.patternHint.textContent =
-      "Examples: /comments, /wiki/*, /shorts, /?feed=home"
+  function renderSettingsIcon() {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 8.8a3.2 3.2 0 1 0 0 6.4a3.2 3.2 0 0 0 0-6.4Z"></path>
+        <path d="M4.8 13.2v-2.4l2-.5c.2-.7.5-1.3.9-1.9l-1.1-1.8l1.7-1.7l1.8 1.1c.6-.4 1.2-.7 1.9-.9l.5-2h2.4l.5 2c.7.2 1.3.5 1.9.9l1.8-1.1l1.7 1.7l-1.1 1.8c.4.6.7 1.2.9 1.9l2 .5v2.4l-2 .5c-.2.7-.5 1.3-.9 1.9l1.1 1.8l-1.7 1.7l-1.8-1.1c-.6.4-1.2.7-1.9.9l-.5 2h-2.4l-.5-2a6.8 6.8 0 0 1-1.9-.9l-1.8 1.1l-1.7-1.7l1.1-1.8a6.8 6.8 0 0 1-.9-1.9l-2-.5Z"></path>
+      </svg>
+    `
   }
 
-  function renderDraftSummary() {
-    elements.draftSummaryTitle.textContent = buildDraftTitle()
-    elements.draftSummaryCopy.textContent = buildDraftSummaryCopy()
-  }
-
-  function buildDraftTitle() {
-    const site = state.draft.site.trim() || "this site"
-    const hasCompleteSchedule =
-      state.draft.type === RULE_TYPES.TIMED &&
-      state.draft.startTime &&
-      state.draft.endTime
-
-    if (state.draft.subpageMode === SUBPAGE_MODES.WHITELIST) {
-      return hasCompleteSchedule
-        ? `Block ${site} from ${state.draft.startTime} to ${state.draft.endTime}, but keep selected paths open.`
-        : `Block ${site}, but keep selected paths open.`
-    }
-
-    if (state.draft.subpageMode === SUBPAGE_MODES.BLACKLIST) {
-      return hasCompleteSchedule
-        ? `Keep ${site} open from ${state.draft.startTime} to ${state.draft.endTime}, except for selected paths.`
-        : `Keep ${site} open, except for selected paths.`
-    }
-
-    if (hasCompleteSchedule) {
-      return `Block ${site} from ${state.draft.startTime} to ${state.draft.endTime}.`
-    }
-
-    return `Block ${site} all day.`
-  }
-
-  function buildDraftSummaryCopy() {
-    const site = state.draft.site.trim()
-
-    if (!site) {
-      return "Add a domain to generate a plain-language summary before you save the rule."
-    }
-
-    if (
-      state.draft.type === RULE_TYPES.TIMED &&
-      (!state.draft.startTime || !state.draft.endTime)
-    ) {
-      return "Choose both a start and end time so the rule schedule is complete."
-    }
-
-    if (state.draft.subpageMode === SUBPAGE_MODES.WHITELIST) {
-      const count = state.draft.subpageWhitelist.length
-      return count > 0
-        ? `${count} allowed path${count === 1 ? "" : "s"} will stay reachable while the rest of ${site} is blocked.`
-        : `Add at least one allowed path. Without it, the whole domain would still be blocked.`
-    }
-
-    if (state.draft.subpageMode === SUBPAGE_MODES.BLACKLIST) {
-      const count = state.draft.subpageBlacklist.length
-      return count > 0
-        ? `${count} blocked path${count === 1 ? "" : "s"} will be denied while the rest of ${site} stays available.`
-        : `Add at least one blocked path. Without it, the domain would stay fully open.`
-    }
-
-    return `Every page on ${site} will be blocked.`
-  }
-
-  function renderDashboardStats() {
-    const alwaysCount = state.rules.filter((rule) => rule.type === RULE_TYPES.ALWAYS).length
-    const timedCount = state.rules.filter((rule) => rule.type === RULE_TYPES.TIMED).length
-
-    elements.totalRulesCount.textContent = String(state.rules.length)
-    elements.alwaysRulesCount.textContent = String(alwaysCount)
-    elements.timedRulesCount.textContent = String(timedCount)
-  }
-
-  function buildRuleNarrative(rule) {
-    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
-      return `Blocks ${rule.site} by default and keeps only the listed paths reachable.`
-    }
-
-    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
-      return `Keeps ${rule.site} open by default and blocks only the listed paths.`
-    }
-
-    return `Blocks the entire domain ${rule.site}.`
-  }
-
-  function getCoverageLabel(mode) {
-    if (mode === SUBPAGE_MODES.WHITELIST) {
-      return "Only allow listed paths"
-    }
-
-    if (mode === SUBPAGE_MODES.BLACKLIST) {
-      return "Only block listed paths"
-    }
-
-    return "Whole domain"
-  }
-
-  function getCoverageCopy(rule) {
-    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
-      return "Everything else on the domain stays blocked."
-    }
-
-    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
-      return "Everything else on the domain stays available."
-    }
-
-    return "Every page on the domain is blocked."
-  }
-
-  function getPathCountLabel(rule) {
-    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
-      return `${rule.subpageWhitelist.length} allowed`
-    }
-
-    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
-      return `${rule.subpageBlacklist.length} blocked`
-    }
-
-    return "No path list"
-  }
-
-  function getPathPreviewCopy(rule) {
-    const entries = getPathEntries(rule)
-
-    if (entries.length === 0) {
-      return "This rule does not depend on specific paths."
-    }
-
-    if (entries.length === 1) {
-      return entries[0]
-    }
-
-    return `${entries[0]} and ${entries.length - 1} more`
-  }
-
-  function getPathEntries(rule) {
-    if (rule.subpageMode === SUBPAGE_MODES.WHITELIST) {
-      return rule.subpageWhitelist
-    }
-
-    if (rule.subpageMode === SUBPAGE_MODES.BLACKLIST) {
-      return rule.subpageBlacklist
-    }
-
-    return []
+  function renderTrashIcon() {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.5 7.5h15"></path>
+        <path d="M9.5 3.75h5l.75 1.5h3.75"></path>
+        <path d="M8 7.5v10.25c0 .83.67 1.5 1.5 1.5h5c.83 0 1.5-.67 1.5-1.5V7.5"></path>
+        <path d="M10.5 10.5v5"></path>
+        <path d="M13.5 10.5v5"></path>
+      </svg>
+    `
   }
 })

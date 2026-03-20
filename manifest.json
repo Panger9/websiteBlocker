@@ -24,6 +24,7 @@
       "resources": [
         "html/blocked.html",
         "js/blocked.js",
+        "js/blocked-page.js",
         "js/rule-engine.js",
         "css/blocked.css"
       ],

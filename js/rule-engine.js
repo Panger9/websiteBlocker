@@ -8,6 +8,7 @@
   root.SiteBlockerRules = api
 })(typeof globalThis !== "undefined" ? globalThis : self, function () {
   const BLOCKED_PAGE_PATH = "/html/blocked.html"
+  const RULES_STORAGE_KEY = "blockedRules"
   const RULE_TYPES = {
     ALWAYS: "always",
     TIMED: "timed",
@@ -17,6 +18,24 @@
     WHITELIST: "whitelist",
     BLACKLIST: "blacklist",
   }
+  const DAYS_OF_WEEK = [
+    { key: "mon", index: 1, shortLabel: "Mon", longLabel: "Monday" },
+    { key: "tue", index: 2, shortLabel: "Tue", longLabel: "Tuesday" },
+    { key: "wed", index: 3, shortLabel: "Wed", longLabel: "Wednesday" },
+    { key: "thu", index: 4, shortLabel: "Thu", longLabel: "Thursday" },
+    { key: "fri", index: 5, shortLabel: "Fri", longLabel: "Friday" },
+    { key: "sat", index: 6, shortLabel: "Sat", longLabel: "Saturday" },
+    { key: "sun", index: 0, shortLabel: "Sun", longLabel: "Sunday" },
+  ]
+  const DAY_KEYS = DAYS_OF_WEEK.map((day) => day.key)
+  const DAY_BY_KEY = DAYS_OF_WEEK.reduce((map, day) => {
+    map[day.key] = day
+    return map
+  }, {})
+  const DAY_BY_INDEX = DAYS_OF_WEEK.reduce((map, day) => {
+    map[day.index] = day
+    return map
+  }, {})
   const MAIN_FRAME_RESOURCE_TYPES = ["main_frame"]
   const SUBRESOURCE_TYPES = [
     "sub_frame",
@@ -69,6 +88,71 @@
   function minutesFromTime(time) {
     const [hours, minutes] = time.split(":").map(Number)
     return hours * 60 + minutes
+  }
+
+  function normalizeDaysOfWeek(days, fallbackToAll = true) {
+    const values = Array.isArray(days) ? days : []
+    const selected = new Set()
+
+    values.forEach((day) => {
+      if (typeof day === "string") {
+        const normalized = day.trim().toLowerCase()
+        if (DAY_BY_KEY[normalized]) {
+          selected.add(normalized)
+          return
+        }
+
+        const fromNumber = DAY_BY_INDEX[Number(normalized)]
+        if (fromNumber) {
+          selected.add(fromNumber.key)
+        }
+        return
+      }
+
+      if (typeof day === "number" && DAY_BY_INDEX[day]) {
+        selected.add(DAY_BY_INDEX[day].key)
+      }
+    })
+
+    const normalizedDays = DAY_KEYS.filter((key) => selected.has(key))
+    if (normalizedDays.length > 0) {
+      return normalizedDays
+    }
+
+    return fallbackToAll ? [...DAY_KEYS] : []
+  }
+
+  function formatDaysOfWeek(days) {
+    const normalized = normalizeDaysOfWeek(days)
+
+    if (normalized.length === DAY_KEYS.length) {
+      return "Mon, Tue, Wed, Thu, Fri, Sat, Sun"
+    }
+
+    return normalized.map((key) => DAY_BY_KEY[key].shortLabel).join(", ")
+  }
+
+  function getDayKeyFromDate(date) {
+    return DAY_BY_INDEX[date.getDay()].key
+  }
+
+  function escapeRegex(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  }
+
+  function buildHostPattern(ruleSite) {
+    const site = sanitizeDomain(ruleSite)
+    if (!site) {
+      return ""
+    }
+
+    return `(?:[a-z0-9-]+\\.)*${escapeRegex(site)}`
+  }
+
+  function getPreviousDayKey(dayKey) {
+    const day = DAY_BY_KEY[dayKey]
+    const previousIndex = (day.index + 6) % 7
+    return DAY_BY_INDEX[previousIndex].key
   }
 
   function normalizePattern(pattern) {
@@ -172,6 +256,10 @@
         type === RULE_TYPES.TIMED && isTimeFormatValid(rule?.endTime || "")
           ? rule.endTime
           : "",
+      daysOfWeek: normalizeDaysOfWeek(
+        rule?.daysOfWeek,
+        !Array.isArray(rule?.daysOfWeek)
+      ),
       subpageMode,
       subpageWhitelist: uniqueNormalizedPatterns(rule?.subpageWhitelist),
       subpageBlacklist: uniqueNormalizedPatterns(rule?.subpageBlacklist),
@@ -179,20 +267,24 @@
   }
 
   function normalizeRules(rules) {
-    return Array.isArray(rules) ? rules.map(normalizeRule) : []
-  }
+    if (!Array.isArray(rules)) {
+      return []
+    }
 
-  function createRuleKey(rule) {
-    const normalized = normalizeRule(rule)
-    return [
-      normalized.type,
-      normalized.site,
-      normalized.startTime,
-      normalized.endTime,
-      normalized.subpageMode,
-      normalized.subpageWhitelist.join(","),
-      normalized.subpageBlacklist.join(","),
-    ].join("|")
+    const normalized = []
+    const seenSites = new Set()
+
+    rules.forEach((rule) => {
+      const candidate = normalizeRule(rule)
+      if (!candidate.site || seenSites.has(candidate.site)) {
+        return
+      }
+
+      seenSites.add(candidate.site)
+      normalized.push(candidate)
+    })
+
+    return normalized
   }
 
   function validateRuleInput(rule, existingRules, excludeIndex) {
@@ -208,6 +300,8 @@
         errors.schedule = "Choose both a start and end time."
       } else if (normalizedRule.startTime === normalizedRule.endTime) {
         errors.schedule = "Start and end time must be different."
+      } else if (normalizedRule.daysOfWeek.length === 0) {
+        errors.schedule = "Choose at least one day."
       }
     }
 
@@ -231,16 +325,11 @@
       }
 
       const candidate = normalizeRule(existingRule)
-      return (
-        candidate.type === normalizedRule.type &&
-        candidate.site === normalizedRule.site &&
-        candidate.startTime === normalizedRule.startTime &&
-        candidate.endTime === normalizedRule.endTime
-      )
+      return candidate.site === normalizedRule.site
     })
 
     if (duplicateExists) {
-      errors.site = "An identical rule already exists."
+      errors.site = "A rule already exists for this domain."
     }
 
     return {
@@ -277,12 +366,25 @@
 
     const reference = now || new Date()
     const current = reference.getHours() * 60 + reference.getMinutes()
+    const selectedDays = normalizeDaysOfWeek(rule.daysOfWeek, false)
+    if (selectedDays.length === 0) {
+      return false
+    }
+    const todayKey = getDayKeyFromDate(reference)
+    const previousDayKey = getPreviousDayKey(todayKey)
 
     if (window.startMinutes < window.endMinutes) {
-      return current >= window.startMinutes && current < window.endMinutes
+      return (
+        selectedDays.includes(todayKey) &&
+        current >= window.startMinutes &&
+        current < window.endMinutes
+      )
     }
 
-    return current >= window.startMinutes || current < window.endMinutes
+    return (
+      (selectedDays.includes(todayKey) && current >= window.startMinutes) ||
+      (selectedDays.includes(previousDayKey) && current < window.endMinutes)
+    )
   }
 
   function getNextAllowedDate(rule, now) {
@@ -294,12 +396,23 @@
     const window = getRuleTimeWindow(rule)
     const nextAllowed = new Date(reference)
     const current = reference.getHours() * 60 + reference.getMinutes()
+    const todayKey = getDayKeyFromDate(reference)
+    const previousDayKey = getPreviousDayKey(todayKey)
+    const selectedDays = normalizeDaysOfWeek(rule.daysOfWeek, false)
+    if (selectedDays.length === 0) {
+      return null
+    }
     const endHours = Number(rule.endTime.slice(0, 2))
     const endMinutes = Number(rule.endTime.slice(3, 5))
 
     nextAllowed.setSeconds(0, 0)
 
-    if (window.startMinutes < window.endMinutes || current < window.endMinutes) {
+    if (window.startMinutes < window.endMinutes) {
+      nextAllowed.setHours(endHours, endMinutes, 0, 0)
+      return nextAllowed
+    }
+
+    if (selectedDays.includes(previousDayKey) && current < window.endMinutes) {
       nextAllowed.setHours(endHours, endMinutes, 0, 0)
       return nextAllowed
     }
@@ -309,14 +422,18 @@
     return nextAllowed
   }
 
-  function getRuleHosts(ruleSite) {
-    const site = sanitizeDomain(ruleSite)
-    return site ? [site, `www.${site}`] : []
-  }
-
   function matchesRuleHost(hostname, ruleSite) {
     const normalizedHost = (hostname || "").toLowerCase()
-    return getRuleHosts(ruleSite).includes(normalizedHost)
+    const normalizedRuleSite = sanitizeDomain(ruleSite)
+
+    if (!normalizedHost || !normalizedRuleSite) {
+      return false
+    }
+
+    return (
+      normalizedHost === normalizedRuleSite ||
+      normalizedHost.endsWith(`.${normalizedRuleSite}`)
+    )
   }
 
   function matchUrlPattern(urlString, pattern) {
@@ -362,7 +479,7 @@
   }
 
   function getRuleTypeLabel(type) {
-    return type === RULE_TYPES.TIMED ? "Scheduled" : "Always"
+    return type === RULE_TYPES.TIMED ? "Scheduled" : "Permanent"
   }
 
   function getRuleSummary(rule) {
@@ -373,20 +490,22 @@
         : normalized.subpageMode === SUBPAGE_MODES.BLACKLIST
           ? normalized.subpageBlacklist
           : []
+    const daysLabel = formatDaysOfWeek(normalized.daysOfWeek)
 
     return {
       typeLabel: getRuleTypeLabel(normalized.type),
       modeLabel: getSubpageModeLabel(normalized.subpageMode),
       scheduleLabel:
         normalized.type === RULE_TYPES.TIMED
-          ? `${normalized.startTime} to ${normalized.endTime}`
-          : "All day",
+          ? `${normalized.startTime}-${normalized.endTime}`
+          : "Always active",
+      daysLabel: normalized.type === RULE_TYPES.TIMED ? daysLabel : "",
       details:
         normalized.subpageMode === SUBPAGE_MODES.WHITELIST
           ? `${previewPatterns.length} allowed path${previewPatterns.length === 1 ? "" : "s"}`
           : normalized.subpageMode === SUBPAGE_MODES.BLACKLIST
             ? `${previewPatterns.length} blocked path${previewPatterns.length === 1 ? "" : "s"}`
-            : "Entire domain blocked",
+            : "Whole domain",
       previewPatterns: previewPatterns.slice(0, 2),
     }
   }
@@ -407,6 +526,10 @@
       params.set("end", normalized.endTime)
     }
 
+    if (normalized.daysOfWeek.length > 0) {
+      params.set("days", normalized.daysOfWeek.join(","))
+    }
+
     const extras = extraParams || {}
     Object.keys(extras).forEach((key) => {
       if (extras[key]) {
@@ -422,12 +545,8 @@
     return `${BLOCKED_PAGE_PATH}#${buildBlockedPageQuery(rule, extras)}`
   }
 
-  function escapeRegex(value) {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  }
-
   function buildHostRegex(ruleSite) {
-    return `(?:${getRuleHosts(ruleSite).map(escapeRegex).join("|")})`
+    return buildHostPattern(ruleSite)
   }
 
   function buildDomainRegex(ruleSite, captureWholeUrl) {
@@ -458,13 +577,6 @@
     }
 
     return captureWholeUrl ? `^(${core})$` : `^${core}$`
-  }
-
-  function getBlockCondition(rule) {
-    return {
-      requestDomains: getRuleHosts(rule.site),
-      resourceTypes: SUBRESOURCE_TYPES,
-    }
   }
 
   function createRegexRedirectAction(rule) {
@@ -512,7 +624,10 @@
           id: nextRuleId++,
           priority: 1,
           action: createBlockAction(),
-          condition: getBlockCondition(rawRule),
+          condition: {
+            regexFilter: buildDomainRegex(rawRule.site, false),
+            resourceTypes: SUBRESOURCE_TYPES,
+          },
         })
         continue
       }
@@ -627,22 +742,25 @@
 
   return {
     BLOCKED_PAGE_PATH,
+    RULES_STORAGE_KEY,
     RULE_TYPES,
     SUBPAGE_MODES,
+    DAYS_OF_WEEK,
+    DAY_KEYS,
     MAIN_FRAME_RESOURCE_TYPES,
     SUBRESOURCE_TYPES,
     sanitizeDomain,
     validateDomainInput,
     isTimeFormatValid,
+    normalizeDaysOfWeek,
+    formatDaysOfWeek,
     normalizePattern,
     validatePatternInput,
     normalizeRule,
     normalizeRules,
-    createRuleKey,
     validateRuleInput,
     isRuleTimeActive,
     getNextAllowedDate,
-    getRuleHosts,
     matchesRuleHost,
     matchUrlPattern,
     getRuleSummary,

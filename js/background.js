@@ -1,7 +1,7 @@
 importScripts("rule-engine.js")
 
 const DEBUG = false
-const RULES_STORAGE_KEY = "blockedRules"
+const { RULES_STORAGE_KEY } = SiteBlockerRules
 
 let currentRules = []
 
