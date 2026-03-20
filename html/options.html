@@ -9,8 +9,6 @@
   <body>
     <div class="page-frame">
       <header class="topbar">
-        <div class="topbar-spacer"></div>
-
         <div class="brand-lockup" aria-label="SiteBlocker Free">
           <div class="brand-mark">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -149,6 +147,8 @@
                 </span>
               </label>
             </div>
+
+            <p class="field-hint" id="modeHint" hidden></p>
           </section>
 
           <section class="config-panel schedule-panel">
@@ -224,6 +224,53 @@
           Add site
         </button>
         <p class="form-status" id="formStatus" hidden></p>
+      </div>
+    </section>
+
+    <section class="modal-backdrop" id="deleteModal" hidden>
+      <div
+        class="confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="deleteModalTitle"
+        aria-describedby="deleteModalCopy"
+      >
+        <div class="confirm-modal-header">
+          <h2 id="deleteModalTitle">Delete rule?</h2>
+          <button
+            type="button"
+            class="icon-button"
+            id="cancelDeleteIcon"
+            aria-label="Close delete dialog"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <p class="confirm-copy" id="deleteModalCopy">
+          This rule will be removed from your blocking setup.
+        </p>
+        <p class="confirm-domain" id="deleteRuleLabel"></p>
+        <div class="confirm-actions">
+          <button type="button" class="secondary-button" id="cancelDelete">
+            Cancel
+          </button>
+          <button type="button" class="danger-button" id="confirmDelete">
+            Delete rule
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="toast-region" aria-live="polite" aria-atomic="true">
+      <div class="feedback-toast" id="feedbackToast" hidden>
+        <div class="feedback-toast-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="m7.5 12.5l3 3l6-7"></path>
+          </svg>
+        </div>
+        <p class="feedback-toast-message" id="feedbackToastMessage"></p>
       </div>
     </section>
 

@@ -272,15 +272,20 @@
     }
 
     const normalized = []
-    const seenSites = new Set()
+    const seenRules = new Set()
 
     rules.forEach((rule) => {
       const candidate = normalizeRule(rule)
-      if (!candidate.site || seenSites.has(candidate.site)) {
+      if (!candidate.site) {
         return
       }
 
-      seenSites.add(candidate.site)
+      const candidateKey = JSON.stringify(candidate)
+      if (seenRules.has(candidateKey)) {
+        return
+      }
+
+      seenRules.add(candidateKey)
       normalized.push(candidate)
     })
 
@@ -319,7 +324,7 @@
       errors.subpage = "Add at least one path for the selected subpage strategy."
     }
 
-    const duplicateExists = (existingRules || []).some((existingRule, index) => {
+    const relevantRules = (existingRules || []).filter((existingRule, index) => {
       if (index === excludeIndex) {
         return false
       }
@@ -328,8 +333,29 @@
       return candidate.site === normalizedRule.site
     })
 
-    if (duplicateExists) {
-      errors.site = "A rule already exists for this domain."
+    const conflictingPathMode = relevantRules.some((existingRule) => {
+      const candidate = normalizeRule(existingRule)
+      return (
+        candidate.subpageMode !== SUBPAGE_MODES.NONE &&
+        normalizedRule.subpageMode !== SUBPAGE_MODES.NONE &&
+        candidate.subpageMode !== normalizedRule.subpageMode
+      )
+    })
+
+    if (conflictingPathMode) {
+      errors.site =
+        normalizedRule.subpageMode === SUBPAGE_MODES.WHITELIST
+          ? "A blacklist rule already exists for this domain. Remove it before adding a whitelist rule."
+          : "A whitelist rule already exists for this domain. Remove it before adding a blacklist rule."
+    }
+
+    const exactDuplicateExists = relevantRules.some((existingRule) => {
+      const candidate = normalizeRule(existingRule)
+      return JSON.stringify(candidate) === JSON.stringify(normalizedRule)
+    })
+
+    if (exactDuplicateExists) {
+      errors.site = "This rule already exists."
     }
 
     return {

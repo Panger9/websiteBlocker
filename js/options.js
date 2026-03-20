@@ -28,12 +28,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const DEFAULT_WEEKDAYS = ["mon", "tue", "wed", "thu", "fri"]
+  const FEEDBACK_TOAST_DURATION_MS = 2200
+  const FEEDBACK_TOAST_FADE_MS = 220
 
   const TEXT = {
     addTitle: "Add new site",
     editTitle: "Edit rule",
     addButton: "Add site",
     saveButton: "Save changes",
+    ruleAdded: "Rule added successfully.",
+    ruleUpdated: "Rule updated successfully.",
     loadError: "Saved rules could not be loaded.",
     formError: "Please review the highlighted fields.",
     saveError: "The rule could not be saved.",
@@ -51,6 +55,10 @@ document.addEventListener("DOMContentLoaded", () => {
       "These paths stay open. Everything else on this site is blocked.",
     blockedPathsHelp:
       "These paths are blocked. Everything else on this site stays open.",
+    whitelistBlockedByBlacklist:
+      "A blacklist rule already exists for this domain. Remove it before adding a whitelist rule.",
+    blacklistBlockedByWhitelist:
+      "A whitelist rule already exists for this domain. Remove it before adding a blacklist rule.",
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -74,12 +82,14 @@ document.addEventListener("DOMContentLoaded", () => {
     editorGrid: document.getElementById("editorGrid"),
     blockModeRadios: Array.from(document.querySelectorAll('input[name="blockMode"]')),
     modeDescription: document.getElementById("modeDescription"),
+    modeHint: document.getElementById("modeHint"),
     typeRadios: Array.from(document.querySelectorAll('input[name="ruleType"]')),
     scheduleSection: document.getElementById("scheduleSection"),
     scheduleActiveContent: document.getElementById("scheduleActiveContent"),
     scheduleStaticCopy: document.getElementById("scheduleStaticCopy"),
     startTimeInput: document.getElementById("startTime"),
     endTimeInput: document.getElementById("endTime"),
+    timeFields: Array.from(document.querySelectorAll(".compact-field")),
     dayButtons: Array.from(document.querySelectorAll(".day-chip")),
     pathsSection: document.getElementById("pathsSection"),
     pathsLabel: document.getElementById("pathsLabel"),
@@ -92,6 +102,13 @@ document.addEventListener("DOMContentLoaded", () => {
     scheduleError: document.getElementById("scheduleError"),
     subpageError: document.getElementById("subpageError"),
     formStatus: document.getElementById("formStatus"),
+    deleteModal: document.getElementById("deleteModal"),
+    deleteRuleLabel: document.getElementById("deleteRuleLabel"),
+    cancelDeleteButton: document.getElementById("cancelDelete"),
+    cancelDeleteIconButton: document.getElementById("cancelDeleteIcon"),
+    confirmDeleteButton: document.getElementById("confirmDelete"),
+    feedbackToast: document.getElementById("feedbackToast"),
+    feedbackToastMessage: document.getElementById("feedbackToastMessage"),
   }
 
   const state = {
@@ -100,8 +117,11 @@ document.addEventListener("DOMContentLoaded", () => {
     editorPlacement: "closed",
     editingIndex: -1,
     editingHost: null,
+    pendingDeleteIndex: -1,
     draft: createEmptyDraft(),
   }
+  let feedbackHideTimer = 0
+  let feedbackResetTimer = 0
 
   init()
 
@@ -284,6 +304,22 @@ document.addEventListener("DOMContentLoaded", () => {
       })
     })
 
+    elements.timeFields.forEach((field) => {
+      const input = field.querySelector('input[type="time"]')
+      if (!input) {
+        return
+      }
+
+      field.classList.add("is-time-picker")
+      field.addEventListener("click", (event) => {
+        if (event.target instanceof HTMLLabelElement) {
+          return
+        }
+
+        openTimePicker(input)
+      })
+    })
+
     elements.addPatternButton.addEventListener("click", addActivePattern)
     elements.patternInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -312,6 +348,32 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.saveButton.addEventListener("click", async () => {
       await handleSubmit()
     })
+
+    elements.cancelDeleteButton.addEventListener("click", closeDeleteModal)
+    elements.cancelDeleteIconButton.addEventListener("click", closeDeleteModal)
+    elements.confirmDeleteButton.addEventListener("click", async () => {
+      await confirmDeleteRule()
+    })
+    elements.deleteModal.addEventListener("click", (event) => {
+      if (event.target === elements.deleteModal) {
+        closeDeleteModal()
+      }
+    })
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !elements.deleteModal.hidden) {
+        closeDeleteModal()
+      }
+    })
+  }
+
+  function openTimePicker(input) {
+    if (typeof input.showPicker === "function") {
+      input.showPicker()
+      return
+    }
+
+    input.focus()
+    input.click()
   }
 
   async function loadRules() {
@@ -409,6 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function handleSubmit() {
     clearValidation()
+    clearStatus()
     const candidate = draftToRule()
     const validation = validateRuleInput(
       candidate,
@@ -422,6 +485,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return
     }
 
+    const feedbackMessage =
+      state.editorPlacement === "edit" ? TEXT.ruleUpdated : TEXT.ruleAdded
+
     if (state.editorPlacement === "edit") {
       state.rules[state.editingIndex] = validation.normalizedRule
     } else {
@@ -432,6 +498,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await persistRules()
       closeEditor()
       render()
+      showFeedbackToast(feedbackMessage)
     } catch (error) {
       console.error("Failed to save rules.", error)
       showStatus(TEXT.saveError, "error")
@@ -508,7 +575,12 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAddEditorHost()
     renderRules()
     renderEditorState()
-    elements.blockedSitesCount.textContent = String(state.rules.length)
+    renderDeleteModal()
+    elements.blockedSitesCount.textContent = String(getUniqueSiteCount())
+  }
+
+  function getUniqueSiteCount() {
+    return new Set(state.rules.map((rule) => rule.site)).size
   }
 
   function renderFilters() {
@@ -634,7 +706,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderTrashIcon(),
       `Delete rule for ${rule.site}`,
       async () => {
-        await removeRule(ruleIndex)
+        openDeleteModal(ruleIndex)
       }
     )
 
@@ -695,6 +767,59 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function openDeleteModal(index) {
+    state.pendingDeleteIndex = index
+    renderDeleteModal()
+  }
+
+  function closeDeleteModal() {
+    state.pendingDeleteIndex = -1
+    renderDeleteModal()
+  }
+
+  async function confirmDeleteRule() {
+    if (state.pendingDeleteIndex < 0) {
+      return
+    }
+
+    const index = state.pendingDeleteIndex
+    closeDeleteModal()
+    await removeRule(index)
+  }
+
+  function renderDeleteModal() {
+    const hasPendingDelete = state.pendingDeleteIndex >= 0
+    elements.deleteModal.hidden = !hasPendingDelete
+
+    if (!hasPendingDelete) {
+      elements.deleteRuleLabel.textContent = ""
+      return
+    }
+
+    const rule = state.rules[state.pendingDeleteIndex]
+    if (!rule) {
+      closeDeleteModal()
+      return
+    }
+
+    elements.deleteRuleLabel.textContent = buildDeleteLabel(rule)
+  }
+
+  function buildDeleteLabel(rule) {
+    const scope =
+      rule.subpageMode === SUBPAGE_MODES.WHITELIST
+        ? "Whitelist"
+        : rule.subpageMode === SUBPAGE_MODES.BLACKLIST
+          ? "Blacklist"
+          : "Block all"
+
+    if (rule.type === RULE_TYPES.TIMED) {
+      return `${rule.site} • ${scope} • ${rule.startTime}-${rule.endTime}`
+    }
+
+    return `${rule.site} • ${scope}`
+  }
+
   function isEditingRule(ruleIndex) {
     return state.editorPlacement === "edit" && state.editingIndex === ruleIndex
   }
@@ -712,7 +837,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return
     }
 
-    targetHost.appendChild(elements.sharedEditor)
+    if (elements.sharedEditor.parentElement !== targetHost) {
+      targetHost.appendChild(elements.sharedEditor)
+    }
     elements.sharedEditor.hidden = false
     elements.sharedEditor.classList.toggle("is-inline", state.editorPlacement === "edit")
     elements.editorHeader.hidden = state.editorPlacement === "edit"
@@ -723,9 +850,9 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.saveButton.textContent =
       state.editorPlacement === "add" ? TEXT.addButton : TEXT.saveButton
 
-    elements.domainInput.value = state.draft.site
-    elements.startTimeInput.value = state.draft.startTime
-    elements.endTimeInput.value = state.draft.endTime
+    syncInputValue(elements.domainInput, state.draft.site)
+    syncInputValue(elements.startTimeInput, state.draft.startTime)
+    syncInputValue(elements.endTimeInput, state.draft.endTime)
     elements.scheduleSection.classList.toggle(
       "is-static",
       state.draft.type !== RULE_TYPES.TIMED
@@ -753,8 +880,19 @@ document.addEventListener("DOMContentLoaded", () => {
     })
 
     syncModeDescriptions()
+    renderModeHint()
     renderPatternSection()
     updateSaveButtonState()
+  }
+
+  function syncInputValue(input, value) {
+    if (document.activeElement === input) {
+      return
+    }
+
+    if (input.value !== value) {
+      input.value = value
+    }
   }
 
   function syncModeDescriptions() {
@@ -769,6 +907,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     elements.modeDescription.textContent = TEXT.modeBlacklist
+  }
+
+  function renderModeHint() {
+    const conflict = getModeConflictMessage()
+    elements.modeHint.hidden = !conflict
+    elements.modeHint.textContent = conflict || ""
+  }
+
+  function getModeConflictMessage() {
+    const site = state.draft.site.trim()
+    if (!site || state.draft.blockMode === BLOCK_MODES.ALL) {
+      return ""
+    }
+
+    const conflictingMode = getExistingConflictingPathMode(
+      site,
+      state.editorPlacement === "edit" ? state.editingIndex : -1,
+      getDraftSubpageMode()
+    )
+
+    if (conflictingMode === SUBPAGE_MODES.BLACKLIST) {
+      return TEXT.whitelistBlockedByBlacklist
+    }
+
+    if (conflictingMode === SUBPAGE_MODES.WHITELIST) {
+      return TEXT.blacklistBlockedByWhitelist
+    }
+
+    return ""
+  }
+
+  function getExistingConflictingPathMode(site, excludeIndex, draftMode) {
+    if (draftMode === SUBPAGE_MODES.NONE) {
+      return ""
+    }
+
+    const normalizedSite = normalizeRule({ site }).site
+    if (!normalizedSite) {
+      return ""
+    }
+
+    for (let index = 0; index < state.rules.length; index += 1) {
+      if (index === excludeIndex) {
+        continue
+      }
+
+      const rule = normalizeRule(state.rules[index])
+      if (rule.site !== normalizedSite || rule.subpageMode === SUBPAGE_MODES.NONE) {
+        continue
+      }
+
+      if (rule.subpageMode !== draftMode) {
+        return rule.subpageMode
+      }
+    }
+
+    return ""
   }
 
   function renderPatternSection() {
@@ -953,6 +1148,39 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.formStatus.hidden = true
     elements.formStatus.textContent = ""
     delete elements.formStatus.dataset.tone
+  }
+
+  function showFeedbackToast(message) {
+    window.clearTimeout(feedbackHideTimer)
+    window.clearTimeout(feedbackResetTimer)
+
+    elements.feedbackToastMessage.textContent = message
+    elements.feedbackToast.hidden = false
+    elements.feedbackToast.classList.remove("is-exiting")
+
+    window.requestAnimationFrame(() => {
+      elements.feedbackToast.classList.add("is-visible")
+    })
+
+    feedbackHideTimer = window.setTimeout(() => {
+      hideFeedbackToast()
+    }, FEEDBACK_TOAST_DURATION_MS)
+  }
+
+  function hideFeedbackToast() {
+    if (elements.feedbackToast.hidden) {
+      return
+    }
+
+    window.clearTimeout(feedbackHideTimer)
+    elements.feedbackToast.classList.remove("is-visible")
+    elements.feedbackToast.classList.add("is-exiting")
+
+    feedbackResetTimer = window.setTimeout(() => {
+      elements.feedbackToast.hidden = true
+      elements.feedbackToast.classList.remove("is-exiting")
+      elements.feedbackToastMessage.textContent = ""
+    }, FEEDBACK_TOAST_FADE_MS)
   }
 
   function renderSettingsIcon() {

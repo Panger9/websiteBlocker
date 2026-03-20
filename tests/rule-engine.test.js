@@ -92,16 +92,25 @@ test("normalizes weekday schedules", () => {
   assert.strictEqual(rules.formatDaysOfWeek(["mon", "wed", "fri"]), "Mon, Wed, Fri")
 })
 
-test("keeps only one normalized rule per site", () => {
+test("keeps multiple compatible rules for the same site", () => {
   const normalized = rules.normalizeRules([
     { type: "always", site: "youtube.com", subpageMode: "none" },
-    { type: "timed", site: "youtube.com", startTime: "09:00", endTime: "17:00" },
+    {
+      type: "timed",
+      site: "youtube.com",
+      startTime: "09:00",
+      endTime: "17:00",
+      daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+      subpageMode: "blacklist",
+      subpageBlacklist: ["/shorts"],
+    },
     { type: "always", site: "reddit.com", subpageMode: "none" },
   ])
 
-  assert.strictEqual(normalized.length, 2)
+  assert.strictEqual(normalized.length, 3)
   assert.strictEqual(normalized[0].site, "youtube.com")
-  assert.strictEqual(normalized[1].site, "reddit.com")
+  assert.strictEqual(normalized[1].site, "youtube.com")
+  assert.strictEqual(normalized[2].site, "reddit.com")
 })
 
 test("matches domain rules on subdomains but not lookalike hosts", () => {
@@ -327,14 +336,51 @@ test("builds blocked page URLs with rule metadata", () => {
   assert.ok(blockedUrl.includes("blocked=https%3A%2F%2Fm.youtube.com%2Fshorts%2F123"))
 })
 
-test("rejects a second rule for the same site", () => {
+test("allows block-all and blacklist rules to coexist for the same site", () => {
   const validation = rules.validateRuleInput(
     {
       type: "timed",
       site: "youtube.com",
-      startTime: "09:00",
-      endTime: "17:00",
+      startTime: "06:00",
+      endTime: "10:00",
       daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+      subpageMode: "none",
+    },
+    [
+      {
+        type: "always",
+        site: "youtube.com",
+        subpageMode: "blacklist",
+        subpageBlacklist: ["/shorts"],
+      },
+    ]
+  )
+
+  assert.strictEqual(validation.valid, true)
+})
+
+test("rejects mixing whitelist and blacklist rules for the same site", () => {
+  const whitelistValidation = rules.validateRuleInput(
+    {
+      type: "always",
+      site: "youtube.com",
+      subpageMode: "whitelist",
+      subpageWhitelist: ["/watch?v=course"],
+    },
+    [
+      {
+        type: "always",
+        site: "youtube.com",
+        subpageMode: "blacklist",
+        subpageBlacklist: ["/shorts"],
+      },
+    ]
+  )
+
+  const blacklistValidation = rules.validateRuleInput(
+    {
+      type: "always",
+      site: "youtube.com",
       subpageMode: "blacklist",
       subpageBlacklist: ["/shorts"],
     },
@@ -342,13 +388,44 @@ test("rejects a second rule for the same site", () => {
       {
         type: "always",
         site: "youtube.com",
-        subpageMode: "none",
+        subpageMode: "whitelist",
+        subpageWhitelist: ["/watch?v=course"],
+      },
+    ]
+  )
+
+  assert.strictEqual(whitelistValidation.valid, false)
+  assert.strictEqual(
+    whitelistValidation.errors.site,
+    "A blacklist rule already exists for this domain. Remove it before adding a whitelist rule."
+  )
+  assert.strictEqual(blacklistValidation.valid, false)
+  assert.strictEqual(
+    blacklistValidation.errors.site,
+    "A whitelist rule already exists for this domain. Remove it before adding a blacklist rule."
+  )
+})
+
+test("rejects exact duplicate rules", () => {
+  const validation = rules.validateRuleInput(
+    {
+      type: "always",
+      site: "youtube.com",
+      subpageMode: "blacklist",
+      subpageBlacklist: ["/shorts"],
+    },
+    [
+      {
+        type: "always",
+        site: "youtube.com",
+        subpageMode: "blacklist",
+        subpageBlacklist: ["/shorts"],
       },
     ]
   )
 
   assert.strictEqual(validation.valid, false)
-  assert.strictEqual(validation.errors.site, "A rule already exists for this domain.")
+  assert.strictEqual(validation.errors.site, "This rule already exists.")
 })
 
 if (!process.exitCode) {

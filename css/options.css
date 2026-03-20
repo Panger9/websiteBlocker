@@ -87,7 +87,7 @@ svg {
 
 .topbar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   padding-bottom: 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -97,7 +97,7 @@ svg {
   display: inline-flex;
   align-items: flex-start;
   gap: 12px;
-  justify-self: center;
+  justify-self: start;
 }
 
 .brand-mark,
@@ -248,7 +248,6 @@ svg {
   border-radius: var(--radius-xl);
   border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: var(--shadow);
 }
 
 .editor-panel {
@@ -387,7 +386,8 @@ input:focus {
 
 .panel-copy,
 .field-error,
-.form-status {
+.form-status,
+.field-hint {
   margin: 0;
   font-size: 12px;
 }
@@ -415,6 +415,7 @@ input:focus {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: transparent;
   color: #b8b8c6;
+  cursor: pointer;
 }
 
 .editor-grid.is-balanced {
@@ -443,6 +444,7 @@ input:focus {
   position: absolute;
   inset: 0;
   opacity: 0;
+  cursor: pointer;
 }
 
 .mode-card:hover,
@@ -541,6 +543,24 @@ input:focus {
 
 .compact-field {
   gap: 6px;
+}
+
+.compact-field.is-time-picker {
+  cursor: pointer;
+}
+
+.compact-field.is-time-picker input[type="time"] {
+  cursor: pointer;
+}
+
+.compact-field.is-time-picker:hover input[type="time"] {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #0d0d10;
+  transform: translateY(-1px);
+}
+
+.compact-field.is-time-picker:active input[type="time"] {
+  transform: scale(0.99);
 }
 
 .day-grid {
@@ -663,7 +683,7 @@ input:focus {
 .save-button {
   width: 100%;
   min-height: 44px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: linear-gradient(180deg, #b1b1b4, #a0a0a3);
   color: #17171b;
@@ -676,7 +696,8 @@ input:focus {
 }
 
 .save-button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  border-color: rgba(45, 211, 92, 0.5);
+  box-shadow: 0 0 0 1px rgba(45, 211, 92, 0.14);
 }
 
 .save-button:disabled {
@@ -686,6 +707,11 @@ input:focus {
 
 .field-error {
   color: #ff8a8a;
+}
+
+.field-hint {
+  color: #d7ad64;
+  line-height: 1.5;
 }
 
 .form-status {
@@ -700,13 +726,11 @@ input:focus {
 .rule-card {
   overflow: hidden;
   transition:
-    background-color 180ms ease,
     border-color 180ms ease,
     transform 180ms ease;
 }
 
 .rule-card:hover {
-  background: var(--surface-hover);
   border-color: var(--border-strong);
   transform: translateY(-1px);
 }
@@ -818,9 +842,181 @@ input:focus {
   align-self: center;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(5, 5, 7, 0.72);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.confirm-modal {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)), var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.confirm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.confirm-modal-header h2,
+.confirm-copy,
+.confirm-domain {
+  margin: 0;
+}
+
+.confirm-modal-header h2 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.confirm-copy {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.confirm-domain {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ffb0b0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.secondary-button,
+.danger-button {
+  min-width: 120px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 700;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 150ms ease;
+}
+
+.secondary-button {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.danger-button {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #ffaaaa;
+}
+
+.secondary-button:hover,
+.danger-button:hover {
+  transform: translateY(-1px);
+}
+
+.secondary-button:active,
+.danger-button:active {
+  transform: scale(0.985);
+}
+
+.toast-region {
+  position: fixed;
+  inset: auto 20px 20px auto;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.feedback-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  max-width: min(360px, calc(100vw - 40px));
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(45, 211, 92, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+    var(--surface);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.feedback-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.feedback-toast.is-exiting {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.feedback-toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(45, 211, 92, 0.16);
+  color: var(--green);
+  flex: 0 0 auto;
+}
+
+.feedback-toast-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.feedback-toast-message {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .rule-action.is-active {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-toast {
+    transition: none;
+  }
 }
 
 .empty-state {
@@ -884,6 +1080,15 @@ input:focus {
   .brand-lockup,
   .count-pill {
     justify-self: start;
+  }
+
+  .confirm-actions {
+    flex-direction: column-reverse;
+  }
+
+  .secondary-button,
+  .danger-button {
+    width: 100%;
   }
 }
 
