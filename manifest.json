@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Yet Another Site Blocker",
-  "version": "2.0.1",
+  "version": "2.1",
   "description": "Website Blockers suck. This one doesn't. No ads, no subscription, no  popups, no BS. Just block websites and get on with your life.",
   "permissions": [
     "storage",
