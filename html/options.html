@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>SiteBlocker Free</title>
+    <title>Yet Another Site Blocker</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="../css/options.css" />
@@ -9,7 +9,7 @@
   <body>
     <div class="page-frame">
       <header class="topbar">
-        <div class="brand-lockup" aria-label="SiteBlocker Free">
+        <div class="brand-lockup" aria-label="Yet Another Site Blocker">
           <div class="brand-mark">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -19,7 +19,7 @@
             </svg>
           </div>
           <div>
-            <p class="brand-title">SiteBlocker Free</p>
+            <p class="brand-title">Yet Another Site Blocker</p>
             <p class="brand-subtitle">Work with focus</p>
           </div>
         </div>
@@ -55,6 +55,41 @@
         <div class="add-editor-host" id="addEditorHost" hidden></div>
 
         <section class="rules-list" id="rulesList" aria-live="polite"></section>
+
+        <section class="stats-panel" aria-labelledby="statsTitle">
+          <div class="stats-panel-header">
+            <div>
+              <p class="stats-eyebrow">Blocked activity</p>
+              <h2 id="statsTitle">Statistics</h2>
+            </div>
+            <button type="button" class="secondary-button stats-reset-button" id="resetStats">
+              Reset stats
+            </button>
+          </div>
+
+          <div class="stats-summary-grid">
+            <article class="stats-summary-card">
+              <p class="stats-summary-label">Blocked navigations</p>
+              <p class="stats-summary-value" id="statsTotalCount">0</p>
+            </article>
+
+            <article class="stats-summary-card">
+              <p class="stats-summary-label">Tracked domains</p>
+              <p class="stats-summary-value" id="statsDomainCount">0</p>
+            </article>
+          </div>
+
+          <div class="stats-list-shell">
+            <div class="stats-list-head">
+              <span>Domain</span>
+              <span>Count</span>
+            </div>
+            <div class="stats-empty-state" id="statsEmptyState" hidden>
+              No blocked navigation has been counted yet.
+            </div>
+            <ul class="stats-list" id="statsList" hidden></ul>
+          </div>
+        </section>
       </main>
 
       <footer class="footer">
@@ -263,6 +298,42 @@
       </div>
     </section>
 
+    <section class="modal-backdrop" id="resetStatsModal" hidden>
+      <div
+        class="confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resetStatsModalTitle"
+        aria-describedby="resetStatsModalCopy"
+      >
+        <div class="confirm-modal-header">
+          <h2 id="resetStatsModalTitle">Reset statistics?</h2>
+          <button
+            type="button"
+            class="icon-button"
+            id="cancelResetStatsIcon"
+            aria-label="Close reset statistics dialog"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <p class="confirm-copy" id="resetStatsModalCopy">
+          This clears all locally stored blocked-navigation statistics. Your blocking rules stay unchanged.
+        </p>
+        <p class="confirm-domain stats-reset-warning" id="resetStatsLabel"></p>
+        <div class="confirm-actions">
+          <button type="button" class="secondary-button" id="cancelResetStats">
+            Cancel
+          </button>
+          <button type="button" class="danger-button" id="confirmResetStats">
+            Reset statistics
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section class="toast-region" aria-live="polite" aria-atomic="true">
       <div class="feedback-toast" id="feedbackToast" hidden>
         <div class="feedback-toast-icon" aria-hidden="true">
@@ -275,6 +346,7 @@
     </section>
 
     <script src="../js/rule-engine.js"></script>
+    <script src="../js/stats.js"></script>
     <script src="../js/options.js"></script>
   </body>
 </html>

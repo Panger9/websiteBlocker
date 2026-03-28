@@ -9,6 +9,14 @@ document.addEventListener("DOMContentLoaded", () => {
     validatePatternInput,
     formatDaysOfWeek,
   } = SiteBlockerRules
+  const {
+    STATS_STORAGE_KEY,
+    createEmptyStatistics,
+    normalizeStatistics,
+    resetStatistics: createResetStatistics,
+    getSortedDomainStats,
+    getStatisticsSummary,
+  } = SiteBlockerStats
 
   const BLOCK_MODES = {
     ALL: "all",
@@ -59,6 +67,9 @@ document.addEventListener("DOMContentLoaded", () => {
       "A blacklist rule already exists for this domain. Remove it before adding a whitelist rule.",
     blacklistBlockedByWhitelist:
       "A whitelist rule already exists for this domain. Remove it before adding a blacklist rule.",
+    statsReset: "Statistics reset successfully.",
+    statsResetError: "Blocked statistics could not be reset.",
+    statsResetLabel: "This will erase %s blocked navigation%s across %s domain%s.",
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -68,6 +79,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const elements = {
     blockedSitesCount: document.getElementById("blockedSitesCount"),
+    statsTotalCount: document.getElementById("statsTotalCount"),
+    statsDomainCount: document.getElementById("statsDomainCount"),
+    statsList: document.getElementById("statsList"),
+    statsEmptyState: document.getElementById("statsEmptyState"),
+    resetStatsButton: document.getElementById("resetStats"),
+    resetStatsModal: document.getElementById("resetStatsModal"),
+    resetStatsLabel: document.getElementById("resetStatsLabel"),
+    cancelResetStatsButton: document.getElementById("cancelResetStats"),
+    cancelResetStatsIconButton: document.getElementById("cancelResetStatsIcon"),
+    confirmResetStatsButton: document.getElementById("confirmResetStats"),
     filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
     openComposerButton: document.getElementById("openComposer"),
     addEditorHost: document.getElementById("addEditorHost"),
@@ -113,11 +134,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const state = {
     rules: [],
+    statistics: createEmptyStatistics(),
     filter: FILTERS.ALL,
     editorPlacement: "closed",
     editingIndex: -1,
     editingHost: null,
     pendingDeleteIndex: -1,
+    isResetStatsModalOpen: false,
     draft: createEmptyDraft(),
   }
   let feedbackHideTimer = 0
@@ -129,6 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
     applyVersion()
     bindEvents()
     await loadRules()
+    await loadStatistics()
     applyPreviewState()
     render()
   }
@@ -153,6 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function createStorageAdapter(isPreview) {
     let memoryRules = createPreviewRules()
+    let memoryStatistics = createPreviewStatistics()
 
     if (!isPreview && typeof chrome !== "undefined" && chrome.storage?.local) {
       return {
@@ -173,6 +198,15 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           })
         },
+        async getStatistics() {
+          const result = await chrome.storage.local.get([STATS_STORAGE_KEY])
+          return normalizeStatistics(result[STATS_STORAGE_KEY])
+        },
+        async resetStatistics() {
+          await chrome.storage.local.set({
+            [STATS_STORAGE_KEY]: createResetStatistics(),
+          })
+        },
       }
     }
 
@@ -182,6 +216,12 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       async saveRules(rules) {
         memoryRules = normalizeRules(rules)
+      },
+      async getStatistics() {
+        return normalizeStatistics(memoryStatistics)
+      },
+      async resetStatistics() {
+        memoryStatistics = createResetStatistics()
       },
     }
   }
@@ -209,6 +249,17 @@ document.addEventListener("DOMContentLoaded", () => {
         subpageWhitelist: ["/comments", "/r/programming"],
       },
     ]
+  }
+
+  function createPreviewStatistics() {
+    return normalizeStatistics({
+      totalBlockedNavigations: 31,
+      domains: {
+        "youtube.com": { count: 14 },
+        "reddit.com": { count: 9 },
+        "twitter.com": { count: 8 },
+      },
+    })
   }
 
   function createEmptyDraft() {
@@ -247,6 +298,21 @@ document.addEventListener("DOMContentLoaded", () => {
         state.filter = button.dataset.filter || FILTERS.ALL
         render()
       })
+    })
+
+    elements.resetStatsButton.addEventListener("click", () => {
+      openResetStatsModal()
+    })
+
+    elements.cancelResetStatsButton.addEventListener("click", closeResetStatsModal)
+    elements.cancelResetStatsIconButton.addEventListener("click", closeResetStatsModal)
+    elements.confirmResetStatsButton.addEventListener("click", async () => {
+      await handleResetStatistics()
+    })
+    elements.resetStatsModal.addEventListener("click", (event) => {
+      if (event.target === elements.resetStatsModal) {
+        closeResetStatsModal()
+      }
     })
 
     elements.openComposerButton.addEventListener("click", () => {
@@ -360,8 +426,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     })
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !elements.deleteModal.hidden) {
-        closeDeleteModal()
+      if (event.key === "Escape") {
+        if (!elements.deleteModal.hidden) {
+          closeDeleteModal()
+        }
+
+        if (!elements.resetStatsModal.hidden) {
+          closeResetStatsModal()
+        }
       }
     })
   }
@@ -383,6 +455,15 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Failed to load rules.", error)
       state.rules = []
       showStatus(TEXT.loadError, "error")
+    }
+  }
+
+  async function loadStatistics() {
+    try {
+      state.statistics = normalizeStatistics(await storage.getStatistics())
+    } catch (error) {
+      console.error("Failed to load statistics.", error)
+      state.statistics = createEmptyStatistics()
     }
   }
 
@@ -505,6 +586,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function handleResetStatistics() {
+    try {
+      await storage.resetStatistics()
+      state.statistics = createEmptyStatistics()
+      closeResetStatsModal()
+      render()
+      showFeedbackToast(TEXT.statsReset)
+    } catch (error) {
+      console.error("Failed to reset statistics.", error)
+      closeResetStatsModal()
+      showStatus(TEXT.statsResetError, "error")
+    }
+  }
+
   function addActivePattern() {
     const validation = validatePatternInput(elements.patternInput.value)
     clearFieldError(elements.subpageError)
@@ -571,16 +666,51 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function render() {
+    renderStatistics()
     renderFilters()
     renderAddEditorHost()
     renderRules()
     renderEditorState()
     renderDeleteModal()
+    renderResetStatsModal()
     elements.blockedSitesCount.textContent = String(getUniqueSiteCount())
   }
 
   function getUniqueSiteCount() {
     return new Set(state.rules.map((rule) => rule.site)).size
+  }
+
+  function renderStatistics() {
+    const summary = getStatisticsSummary(state.statistics)
+    const rows = getSortedDomainStats(state.statistics)
+
+    elements.statsTotalCount.textContent = String(summary.totalBlockedNavigations)
+    elements.statsDomainCount.textContent = String(summary.blockedDomainsCount)
+    elements.resetStatsButton.disabled = summary.totalBlockedNavigations === 0
+
+    elements.statsList.innerHTML = ""
+    elements.statsEmptyState.hidden = rows.length > 0
+    elements.statsList.hidden = rows.length === 0
+
+    rows.forEach((row) => {
+      elements.statsList.appendChild(createStatisticsRow(row))
+    })
+  }
+
+  function createStatisticsRow(entry) {
+    const item = document.createElement("li")
+    item.className = "stats-row"
+
+    const site = document.createElement("span")
+    site.className = "stats-row-site"
+    site.textContent = entry.site
+
+    const count = document.createElement("span")
+    count.className = "stats-row-count"
+    count.textContent = String(entry.count)
+
+    item.append(site, count)
+    return item
   }
 
   function renderFilters() {
@@ -805,6 +935,40 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.deleteRuleLabel.textContent = buildDeleteLabel(rule)
   }
 
+  function openResetStatsModal() {
+    if (getStatisticsSummary(state.statistics).totalBlockedNavigations === 0) {
+      return
+    }
+
+    state.isResetStatsModalOpen = true
+    renderResetStatsModal()
+  }
+
+  function closeResetStatsModal() {
+    state.isResetStatsModalOpen = false
+    renderResetStatsModal()
+  }
+
+  function renderResetStatsModal() {
+    elements.resetStatsModal.hidden = !state.isResetStatsModalOpen
+
+    if (!state.isResetStatsModalOpen) {
+      elements.resetStatsLabel.textContent = ""
+      return
+    }
+
+    const summary = getStatisticsSummary(state.statistics)
+    elements.resetStatsLabel.textContent = formatStatsResetLabel(summary)
+  }
+
+  function formatStatsResetLabel(summary) {
+    return TEXT.statsResetLabel
+      .replace("%s", String(summary.totalBlockedNavigations))
+      .replace("%s", summary.totalBlockedNavigations === 1 ? "" : "s")
+      .replace("%s", String(summary.blockedDomainsCount))
+      .replace("%s", summary.blockedDomainsCount === 1 ? "" : "s")
+  }
+
   function buildDeleteLabel(rule) {
     const scope =
       rule.subpageMode === SUBPAGE_MODES.WHITELIST
@@ -814,10 +978,10 @@ document.addEventListener("DOMContentLoaded", () => {
           : "Block all"
 
     if (rule.type === RULE_TYPES.TIMED) {
-      return `${rule.site} • ${scope} • ${rule.startTime}-${rule.endTime}`
+      return `${rule.site} - ${scope} - ${rule.startTime}-${rule.endTime}`
     }
 
-    return `${rule.site} • ${scope}`
+    return `${rule.site} - ${scope}`
   }
 
   function isEditingRule(ruleIndex) {

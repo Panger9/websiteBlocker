@@ -1,8 +1,8 @@
-# SiteBlocker Free
+# Yet Another Site Blocker
 
-Boost your focus and take control of your browsing with SiteBlocker Free!
+Boost your focus and take control of your browsing with Yet Another Site Blocker!
 
-SiteBlocker Free helps you easily block distracting websites, either permanently or on a set schedule. It's a simple, effective tool to improve productivity and manage your online time.
+Yet Another Site Blocker helps you easily block distracting websites, either permanently or on a set schedule. It's a simple, effective tool to improve productivity and manage your online time.
 
 ## Key Features
 
@@ -29,6 +29,11 @@ SiteBlocker Free helps you easily block distracting websites, either permanently
 
 - Built for speed using modern Chrome technology (Manifest V3).
 
+### LOCAL BLOCKING STATISTICS
+
+- Counts how often blocked sites are attempted and shows which domains are hit most often.
+- Statistics stay local on your device and can be reset at any time from the settings page.
+
 ### PRIVACY FOCUSED
 
 - Your block rules are stored only on your computer. We don't track or share your data.
@@ -39,12 +44,12 @@ SiteBlocker Free helps you easily block distracting websites, either permanently
 
 ## How to Use
 
-1.  **Install SiteBlocker Free.**
+1.  **Install Yet Another Site Blocker.**
 2.  **Click the extension icon** to open Settings.
 3.  **Add sites** to your "Always Blocked" list or create a "Time-Scheduled" block.
 4.  **Enjoy more focused browsing!**
 
-SiteBlocker Free is designed to be straightforward and helpful. We hope it helps you reclaim your time!
+Yet Another Site Blocker is designed to be straightforward and helpful. We hope it helps you reclaim your time!
 
 ---
 

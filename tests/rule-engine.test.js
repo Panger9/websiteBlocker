@@ -55,6 +55,13 @@ test("matches exact paths precisely while tolerating trailing slashes", () => {
     rules.matchUrlPattern("https://reddit.com/foo/comments-bar", "/comments"),
     false
   )
+  assert.strictEqual(
+    rules.matchUrlPattern(
+      "https://www.reddit.com/r/poker/comments/2jfkvt/eli5_what_is_icm_and_whyhow_does_it_change_the/",
+      "/comments"
+    ),
+    true
+  )
 })
 
 test("matches prefixes only when intended", () => {
@@ -266,7 +273,29 @@ test("builds DNR rules with allow overrides for whitelist mode", () => {
   assert.strictEqual(dnrRules.length, 3)
   assert.strictEqual(dnrRules[0].action.type, "redirect")
   assert.strictEqual(dnrRules[1].action.type, "allow")
-  assert.ok(dnrRules[1].condition.regexFilter.includes("/comments"))
+  assert.strictEqual(
+    matchesRegexFilter(
+      dnrRules[1].condition.regexFilter,
+      "https://www.reddit.com/r/poker/comments/2jfkvt/eli5_what_is_icm_and_whyhow_does_it_change_the/"
+    ),
+    true
+  )
+})
+
+test("builds segment-aware regex rules for comment paths", () => {
+  const regexFilter = rules.buildPatternRegex("reddit.com", "/comments")
+
+  assert.strictEqual(
+    matchesRegexFilter(
+      regexFilter,
+      "https://www.reddit.com/r/poker/comments/2jfkvt/eli5_what_is_icm_and_whyhow_does_it_change_the/"
+    ),
+    true
+  )
+  assert.strictEqual(
+    matchesRegexFilter(regexFilter, "https://www.reddit.com/r/poker/commentary"),
+    false
+  )
 })
 
 test("builds regex-based full-domain rules that also cover subdomains", () => {

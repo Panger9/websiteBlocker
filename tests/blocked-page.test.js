@@ -26,7 +26,7 @@ test("builds fallback summary when no site metadata exists", () => {
 
   assert.strictEqual(
     blockedPage.buildStaticSummary(params),
-    "This page was blocked by your current SiteBlocker rule."
+    "This page was blocked by your current Yet Another Site Blocker rule."
   )
 })
 

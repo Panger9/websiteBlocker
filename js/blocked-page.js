@@ -37,7 +37,7 @@
     const mode = sourceParams.get("mode")
 
     if (!site) {
-      return "This page was blocked by your current SiteBlocker rule."
+      return "This page was blocked by your current Yet Another Site Blocker rule."
     }
 
     return buildActiveRuleSummary({ site, type, subpageMode: mode })

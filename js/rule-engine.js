@@ -219,6 +219,15 @@
     }
   }
 
+  function isSingleSegmentPattern(pattern) {
+    if (typeof pattern !== "string" || !pattern.startsWith("/")) {
+      return false
+    }
+
+    const trimmed = pattern.slice(1)
+    return Boolean(trimmed) && !trimmed.includes("/") && !trimmed.includes("?")
+  }
+
   function uniqueNormalizedPatterns(patterns) {
     const seen = new Set()
     const normalized = []
@@ -484,10 +493,22 @@
         return pathWithQuery === validation.normalized
       }
 
-      return (
-        normalizeComparablePath(pathname) ===
-        normalizeComparablePath(validation.normalized)
-      )
+      const normalizedPath = normalizeComparablePath(pathname)
+      const normalizedPattern = normalizeComparablePath(validation.normalized)
+
+      if (normalizedPath === normalizedPattern) {
+        return true
+      }
+
+      if (isSingleSegmentPattern(validation.normalized)) {
+        const segment = validation.normalized.slice(1)
+        return pathname
+          .split("/")
+          .filter(Boolean)
+          .includes(segment)
+      }
+
+      return false
     } catch (error) {
       return false
     }
@@ -597,6 +618,9 @@
       core = `https?://${hostRegex}${escapeRegex(prefix)}.*(?:#.*)?`
     } else if (validation.kind === "exact-query") {
       core = `https?://${hostRegex}${escapeRegex(normalizedPattern)}(?:#.*)?`
+    } else if (isSingleSegmentPattern(normalizedPattern)) {
+      const segment = escapeRegex(normalizedPattern.slice(1))
+      core = `https?://${hostRegex}/(?:[^/?#]+/)*${segment}(?:/[^?#]*)?(?:[?#].*)?`
     } else {
       const exactPath = escapeRegex(normalizeComparablePath(normalizedPattern))
       core = `https?://${hostRegex}${exactPath}(?:/)?(?:[?#].*)?`
