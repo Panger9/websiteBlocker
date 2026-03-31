@@ -1,0 +1,7 @@
+interface:
+  display_name: "Create Version"
+  short_description: "Validate, bump, and zip this repo release"
+  default_prompt: "Use $create-version to validate this repo, bump manifest.json, and rebuild websiteBlocker.zip."
+
+policy:
+  allow_implicit_invocation: false
