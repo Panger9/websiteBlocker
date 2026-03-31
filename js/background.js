@@ -21,6 +21,19 @@ if (typeof importScripts === "function") {
 ) {
   const DEBUG = false
 
+  function shouldHandleTabUrlUpdate(changeInfo) {
+    return typeof changeInfo?.url === "string" && changeInfo.url.length > 0
+  }
+
+  function isExtensionPageUrl(runtimeChrome, urlString) {
+    if (!urlString || !runtimeChrome?.runtime?.getURL) {
+      return false
+    }
+
+    const extensionRoot = runtimeChrome.runtime.getURL("")
+    return urlString.startsWith(extensionRoot)
+  }
+
   function createServiceWorkerController({
     chromeApi: runtimeChrome,
     rulesApi: runtimeRules,
@@ -189,7 +202,15 @@ if (typeof importScripts === "function") {
       })
 
       runtimeChrome.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
-        if (details.frameId !== 0) {
+        if (details.frameId !== 0 || isExtensionPageUrl(runtimeChrome, details.url)) {
+          return
+        }
+
+        await checkAndBlockIfNecessary(details.tabId, details.url)
+      })
+
+      runtimeChrome.webNavigation.onCommitted?.addListener(async (details) => {
+        if (details.frameId !== 0 || isExtensionPageUrl(runtimeChrome, details.url)) {
           return
         }
 
@@ -197,10 +218,7 @@ if (typeof importScripts === "function") {
       })
 
       runtimeChrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-        if (
-          !changeInfo.url ||
-          (tab.status !== "complete" && tab.status !== "loading")
-        ) {
+        if (!shouldHandleTabUrlUpdate(changeInfo)) {
           return
         }
 
@@ -264,6 +282,8 @@ if (typeof importScripts === "function") {
   return {
     canInitialize,
     createServiceWorkerController,
+    shouldHandleTabUrlUpdate,
+    isExtensionPageUrl,
     initialize() {
       if (!canInitialize) {
         return null

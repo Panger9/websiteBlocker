@@ -85,6 +85,30 @@ function createChromeStub(initialStatistics = stats.createEmptyStatistics()) {
 }
 
 async function main() {
+  await test("processes URL updates even when tab status is not present", async () => {
+    assert.strictEqual(
+      background.shouldHandleTabUrlUpdate({ url: "https://www.reddit.com/" }),
+      true
+    )
+    assert.strictEqual(background.shouldHandleTabUrlUpdate({}), false)
+  })
+
+  await test("ignores extension-owned URLs in navigation listeners", async () => {
+    const { chromeApi } = createChromeStub()
+
+    assert.strictEqual(
+      background.isExtensionPageUrl(
+        chromeApi,
+        "chrome-extension://test-extension/html/blocked.html"
+      ),
+      true
+    )
+    assert.strictEqual(
+      background.isExtensionPageUrl(chromeApi, "https://www.reddit.com/"),
+      false
+    )
+  })
+
   await test("counts a blocked navigation and redirects the tab", async () => {
     const { chromeApi, storageState, redirectedTabs } = createChromeStub()
     const controller = background.createServiceWorkerController({
